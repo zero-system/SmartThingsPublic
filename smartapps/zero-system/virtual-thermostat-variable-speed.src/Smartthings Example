@@ -1,0 +1,80 @@
+def installed() {
+    subscribe(sensor, "temperature", temperatureHandler)
+    if (motion) {
+        subscribe(motion, "motion", motionHandler)
+    }
+}
+
+def updated() {
+    unsubscribe()
+    subscribe(sensor, "temperature", temperatureHandler)
+    if (motion) {
+        subscribe(motion, "motion", motionHandler)
+    }
+}
+
+def temperatureHandler(evt) {
+    def isActive = hasBeenRecentMotion()
+    if (isActive || emergencySetpoint) {
+        evaluate(evt.doubleValue, isActive ? setPoint : emergencySetpoint)
+    } else {
+        outlets.off()
+    }
+}
+
+def motionHandler(evt) {
+    if (evt.value == "active") {
+        def lastTemp = sensor.currentTemperature
+        if (lastTemp != null) {
+            evaluate(lastTemp, setPoint)
+        }
+    } else if (evt.value == "inactive") {
+        def isActive = hasBeenRecentMotion()
+        log.debug "INACTIVE($isActive)"
+        if (isActive || emergencySetpoint) {
+            def lastTemp = sensor.currentTemperature
+            if (lastTemp != null) {
+                evaluate(lastTemp, isActive ? setPoint : emergencySetpoint)
+            }
+        } else {
+            outlets.off()
+        }
+    }
+}
+
+private evaluate(currentTemp, desiredTemp) {
+    log.debug "EVALUATE($currentTemp, $desiredTemp)"
+    def threshold = 1.0
+    if (mode == "cool") {
+        // air conditioner
+        if (currentTemp - desiredTemp >= threshold) {
+            outlets.on()
+        } else if (desiredTemp - currentTemp >= threshold) {
+            outlets.off()
+        }
+    } else {
+        // heater
+        if (desiredTemp -   >= threshold) {
+            outlets.on()
+        } else if (currentTemp - desiredTemp >= threshold) {
+            outlets.off()
+        }
+    }
+}
+
+private hasBeenRecentMotion() {
+    def isActive = false
+    if (motion && minutes) {
+        def deltaMinutes = minutes as Long
+        if (deltaMinutes) {
+            def motionEvents = motion.eventsSince(new Date(now() - (60000 * deltaMinutes)))
+            log.trace "Found ${motionEvents?.size() ?: 0} events in the last $deltaMinutes minutes"
+            if (motionEvents.find { it.value == "active" }) {
+                isActive = true
+            }
+        }
+    } else {
+        isActive = true
+    }
+    isActive
+}

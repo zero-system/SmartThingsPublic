@@ -13,159 +13,147 @@
  *  for the specific language governing permissions and limitations under the License.
  *
  */
-definition
-(
-    name : "Virtual Thermostat Variable Speed" ,
-    namespace: "zero-system" ,
-    author: "Zero System" ,
-    description: "This is an extension of Virtual Thermostat. It is for cooling a room with a fan connected to a dimmer. " ,
-    category: "" ,
-    iconUrl: "https://s3.amazonaws.com/smartapp-icons/Convenience/Cat-Convenience.png" ,
-    iconX2Url: "https://s3.amazonaws.com/smartapp-icons/Convenience/Cat-Convenience@2x.png" ,
-    iconX3Url: "https://s3.amazonaws.com/smartapp-icons/Convenience/Cat-Convenience@2x.png"
-)
+
+
+import java.io.*
+import java.lang.*
+import java.math.BigDecimal
+import java.math.BigInteger
+import java.net.*
+import java.util.*
+import groovy.lang.*
+import groovy.util.*
+
+
+//definition
+//(
+//    name : "Virtual Thermostat Variable Speed" ,
+//    namespace: "zero-system" ,
+//    author: "Zero System" ,
+//    description: "This is an extension of Virtual Thermostat. It is for cooling a room with a fan connected to a dimmer. " ,
+//    category: "" ,
+//    iconUrl: "https://s3.amazonaws.com/smartapp-icons/Convenience/Cat-Convenience.png" ,
+//    iconX2Url: "https://s3.amazonaws.com/smartapp-icons/Convenience/Cat-Convenience@2x.png" ,
+//    iconX3Url: "https://s3.amazonaws.com/smartapp-icons/Convenience/Cat-Convenience@2x.png"
+//)
 
 
 preferences
-    {
-        section("Choose a temperature sensor(s).")
-        {
-            pargraph "If multiple sensors are used, the average temperature will be calculated."
-            input( title: "Temperature Sensor(s)", name:"tempSensors", type: "capability.temperatureMeasurement", multiple: true, required: true )
-        }
+		{
+			section( "Choose a temperature sensor(s)." )
+					{
+						pargraph "If multiple sensors are used, the average temperature will be calculated."
+						input( title: "Temperature Sensor" , name: "tempSensor" , type: "capability.temperatureMeasurement" , multiple: false , required: true )
+					}
+			
+			section( "Select the cooling fan dimmer outlet." )
+					{
+						pargraph "These outlet will change their level from (0% - 100%) based on room temperature."
+						input( title: "Dimmer Outlet" , name: "outlet" , type: "capability.switchLevel" , multiple: false , required: true )
+					}
+			
+			section( "Set the desired target temperature." )
+					{
+						pargraph "The PID control will attempt to cool to set temperature."
+						input( title: "Target Temp" , name: "targetTemp" , type: "decimal" , required: true , description: "70 (deg)" )
+					}
 
-        section("Select the cooling fan dimmer outlet(s).")
-        {
-            pargraph "These outlet(s) will change their level from (0% - 100%) based on room temperature."
-            input( title: "Dimmer Outlet(s)", name: "outlets", type: "capability.switchLevel", multiple: true, required: true)
-        }
+//			section( "Step time, in minutes." )
+//					{
+//						pargraph( "If temp is over target temp, how many min(s) between corrections. Default: 15 mins" )
+//						input( title: "Step Time (min)" , name: "stepMinutes" , type: "number" , range: "1..*" , defaultValue: 15 , required: false , description: "15 (min)" )
+//					}
+//
+//			section( "Step size percentage." )
+//					{
+//						pargraph( " When the room temperature is over target temperature, how large of a correction to be taken. Default: 10%" )
+//						input( title: "Step Size" , name: "stepSize" , type: "number" , range: "1..100" , defaultValue: 10 , required: false , discription: "10%" )
+//					}
+			
+			section( "Time frame." )
+					{
+						paragraph( "The time frame the PID will run." )
+						input( title: "Start Time" , name: "startTime" , type: "time" , required: true , discription: "9:00 AM" )
+						input( title: "Stop Time" , name: "stopTime" , type: "time" , required: true , discription: "6:00 PM" )
+					}
+			
+		}
 
-        section("Set the desired target temperature and temperature range.")
-        {
-            pargraph "(0%) Min Temp -> TARGET <- Max Temp(100%)"
-            input(title: "Min Temp",    name: "minTemp",    type: "decimal", required: true, description: "65 (deg)")
-            input(title: "Target Temp", name: "targetTemp", type: "decimal", required: true, description: "70 (deg)")
-            input(title: "Max Temp",    name: "maxTemp",    type: "decimal", required: true, description: "75 (deg)")
-        }
-
-        section("Step time, in minutes.")
-        {
-            pargraph( "If temp is over target temp, how many min(s) between corrections. Default: 15 mins" )
-            input( title: "Step Time (min)", name: "stepMinutes", type: "number", range: "1..*", defaultValue: 15, required: false, description: "15 (min)" )
-        }
-
-        section("Step size percentage.")
-        {
-            pargraph( " When the room temperature is over target temperature, how large of a correction to be taken. Default: 10%" )
-            input ( title: "Step Size", name: "stepSize", type: "number", range: "1..100", defaultValue: 10, required: false , discription: "10%")
-        }
-
-        section( "Time frame." )
-        {
-            paragraph( "The time frame the fan(s) will run." )
-            input( title: "Start Time", name: "startTime", type: "time", required: true, discription: "9:00 AM" )
-            input( title: "Stop Time",  name: "stopTime",  type: "time", required: true, discription: "6:00 PM" )
-        }
-
-    }
-
-def installed() {
-    log.debug "Installed with settings: ${settings}"
-
-    initialize()
+def installed()
+{
+	log.debug "Installed with settings: ${settings}"
+	
+	initialize()
 }
 
-def updated() {
-    log.debug "Updated with settings: ${settings}"
-
-    unsubscribe()
-    initialize()
+def updated()
+{
+	log.debug "Updated with settings: ${settings}"
+	
+	unsubscribe()
+	initialize()
 }
 
-def initialize() {
-    // TODO: subscribe to attributes, devices, locations, etc.
+def initialize()
+{
+	// TODO: subscribe to attributes, devices, locations, etc.
+	
+	/*working variables*/
+	state.errorSum = 0.0
+	state.lastError = 0.0
+	
+	state.kp = 0.0
+	state.ki = 0.0
+	state.kd = 0.0
+	
+	schedule( "30 0 0 ? * * *" , scheduledHandler )
+}
+// TODO: Loop
+void scheduledHandler()
+{
+	if ( run() )
+	{
+		PID()
+	}
 }
 
-/**
-def installed() {
-    subscribe(sensor, "temperature", temperatureHandler)
-    if (motion) {
-        subscribe(motion, "motion", motionHandler)
-    }
+// TODO: State (Run or Not)
+boolean run()
+{
+	Date time = new Date()
+	// TODO: test to see if time could be used in-place of "new Date()"
+	boolean withinTimeFrame = timeOfDayIsBetween( startTime , stopTime , time , location.timeZone )
+	
+	log.debug "run: TIME( start: $startTime, stop: $stopTime, time: $time, value: $withinTimeFrame )"
+	
+	return withinTimeFrame
 }
 
-def updated() {
-    unsubscribe()
-    subscribe(sensor, "temperature", temperatureHandler)
-    if (motion) {
-        subscribe(motion, "motion", motionHandler)
-    }
+// TODO: PID Control
+void PID()
+{
+	/*How long since we last calculated*/
+	long currentTime = now()
+	double timeChange = ( double ) ( currentTime - state.lastTime )
+	log.debug "PID: TIME( currentTime: $currentTime, timeChange: $timeChange )"
+	
+	/*Compute all the working error variables*/
+	double error = targetTemp - tempSensor.currentTemperature
+	state.errorSum += ( error * timeChange )
+	double dError = ( error - state.lastError ) / timeChange
+	log.debug "PID: ERROR( error: $error, errorSum: $state.errorSum, dError: $dError )"
+	
+	/*Compute PID Output*/
+	double output = kp * error + ki * state.errorSum + kd * dError
+	int outputLevel = ( int ) Math.round( output )
+	outlet.setLevel( outputLevel )
+	log.debug "PID: OUTPUT( output: $output, ouputLevel: $outputLevel )"
+	
+	/*Remember some variables for next time*/
+	state.lastError = error
+	state.lastTime = currentTime
+	log.debug "PID: TEMP( currentTemp: $tempSensor.currentTemperature )"
 }
 
-def temperatureHandler(evt) {
-    def isActive = hasBeenRecentMotion()
-    if (isActive || emergencySetpoint) {
-        evaluate(evt.doubleValue, isActive ? setPoint : emergencySetpoint)
-    } else {
-        outlets.off()
-    }
-}
-
-def motionHandler(evt) {
-    if (evt.value == "active") {
-        def lastTemp = sensor.currentTemperature
-        if (lastTemp != null) {
-            evaluate(lastTemp, setPoint)
-        }
-    } else if (evt.value == "inactive") {
-        def isActive = hasBeenRecentMotion()
-        log.debug "INACTIVE($isActive)"
-        if (isActive || emergencySetpoint) {
-            def lastTemp = sensor.currentTemperature
-            if (lastTemp != null) {
-                evaluate(lastTemp, isActive ? setPoint : emergencySetpoint)
-            }
-        } else {
-            outlets.off()
-        }
-    }
-}
-
-private evaluate(currentTemp, desiredTemp) {
-    log.debug "EVALUATE($currentTemp, $desiredTemp)"
-    def threshold = 1.0
-    if (mode == "cool") {
-        // air conditioner
-        if (currentTemp - desiredTemp >= threshold) {
-            outlets.on()
-        } else if (desiredTemp - currentTemp >= threshold) {
-            outlets.off()
-        }
-    } else {
-        // heater
-        if (desiredTemp - currentTemp >= threshold) {
-            outlets.on()
-        } else if (currentTemp - desiredTemp >= threshold) {
-            outlets.off()
-        }
-    }
-}
-
-private hasBeenRecentMotion() {
-    def isActive = false
-    if (motion && minutes) {
-        def deltaMinutes = minutes as Long
-        if (deltaMinutes) {
-            def motionEvents = motion.eventsSince(new Date(now() - (60000 * deltaMinutes)))
-            log.trace "Found ${motionEvents?.size() ?: 0} events in the last $deltaMinutes minutes"
-            if (motionEvents.find { it.value == "active" }) {
-                isActive = true
-            }
-        }
-    } else {
-        isActive = true
-    }
-    isActive
-}
-
-*/
+// tempSensor.currentTemperature
+// outlet.setLevel(outputLevel)
