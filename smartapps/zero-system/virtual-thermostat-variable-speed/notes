@@ -1,6 +1,0 @@
-void setPID( double Kp , double Ki , double Kd )
-{
-	kp = Kp
-	ki = Ki
-	kd = Kd
-}
