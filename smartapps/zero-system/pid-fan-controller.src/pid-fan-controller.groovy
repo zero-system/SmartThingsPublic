@@ -45,7 +45,7 @@ preferences
 					}
 			section( "Sampling Time. It is the time between each measurement. Lower time means a faster rate of adjustment." )
 					{
-						input( title: "Sampling Time" , name: "samplingTime" , type: "enum" , required: true , options: ["1 Minute" , "5 Minute" , "10 Minute" , "15 Minute"] , defaultValue: 10 )
+						input( title: "Sampling Time" , name: "samplingTime" , type: "enum" , required: true , options: ["1-Minute" , "5-Minutes" , "10-Minutes" , "15-Minutes"] , defaultValue: 10 )
 					}
 			section( "Set PID variables." )
 					{
@@ -98,24 +98,24 @@ void runPID()
 {
 	switch ( samplingTime )
 	{
-		case 0:
+		case "1-Minute":
 			runEvery1Minute( scheduledHandler )
 			break
 		
-		case 1:
+		case "1":
 			runEvery5Minutes( scheduledHandler )
 			break
 		
-		case 2:
+		case "2":
 			runEvery10Minutes( scheduledHandler )
 			break
 		
-		case 3:
+		case "3":
 			runEvery15Minutes( scheduledHandler )
 			break
 		
 		default:
-			log.error "runPID: case error"
+			log.error "runPID: switch($samplingTime) - Unmached Case."
 			runEvery1Minute( scheduledHandler )
 			break
 	}
