@@ -350,7 +350,7 @@ int setFan( double rawLevel , boolean logging = false)
 	int boundedLevel
 	
 	if      ( getTemp() < settings.minTemp )    boundedLevel = 0    // Min temp cutoff
-	else if ( getFanState() ) 			        boundedLevel = 0    // Sentry value. If fan needs to be turned off
+	else if ( !getFanState() ) 			        boundedLevel = 0    // Sentry value. If fan needs to be turned off
 	else if ( rawLevel < settings.minFanLevel )	boundedLevel = minFanLevel  // Min
 	else if ( rawLevel > 100 ) 				    boundedLevel = 100          // Max
 	else 										boundedLevel = ( int ) Math.round( rawLevel ) // Calculated
