@@ -191,11 +191,11 @@ int setFan( double rawLevel )
 {
 	int boundedLevel
 	
-	if      ( getTemp(  ) < settings.minTemp )                      boundedLevel = 0    // Min temp cutoff
-	else if ( rawLevel < 0 ) 							            boundedLevel = 0    // Sentry value. If fan needs to be turned off, use -1
-	else if ( 0 <= rawLevel && rawLevel < settings.minFanLevel )	boundedLevel = minFanLevel  // Min
-	else if ( rawLevel > 100 ) 							            boundedLevel = 100          // Max
-	else 												            boundedLevel = ( int ) Math.round( rawLevel ) // Calculated
+	if      ( getTemp(  ) < settings.minTemp )  boundedLevel = 0    // Min temp cutoff
+	else if ( rawLevel.equals( 0.0 ) ) 			boundedLevel = 0    // Sentry value. If fan needs to be turned off, use 0
+	else if ( rawLevel < settings.minFanLevel )	boundedLevel = minFanLevel  // Min
+	else if ( rawLevel > 100 ) 				    boundedLevel = 100          // Max
+	else 										boundedLevel = ( int ) Math.round( rawLevel ) // Calculated
 
 	if ( boundedLevel != state.lastFanLevel )   // Prevent const commands being sent to controller if no change is detected.
 //	fans.setLevel( boundedLevel) // TODO: see if it sets all fan levels
