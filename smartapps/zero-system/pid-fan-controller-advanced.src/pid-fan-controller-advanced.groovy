@@ -111,15 +111,15 @@ def initialize()
 	/*working variables*/
 	state.numTempSensors = settings.tempSensors.size() // int
 	
-	state.iValue = 0.0          // double
+	state.iValue = 0.0 // double
 	
-	state.lastTemp = getTemp()  // double
-	state.lastTime = getTime()  // double
+	state.lastTemp = getTemp() // double
+	state.lastTime = getTime() // double
 	
-	state.fanState = true       // boolean
-	state.lastFanLevel = 0      // int
+	state.fanState = true // boolean
+	state.lastFanLevel = 0 // int
 	
-	state.coolingState = false  // boolean
+	state.coolingState = false // boolean
 	
 	setPID()
 	
@@ -170,12 +170,12 @@ void scheduledHandler()
 		log.debug "scheduledHandler: TIME( withinTimeFrame: $withinTimeFrame )"
 		if ( withinTimeFrame )
 		{
-			forcedTempControlOFF()
+			forcedTempControlOFF( true )
 			pidControlON()
 		}
 		else
 		{
-			pidControlOFF()
+			pidControlOFF( true )
 			forcedTempControlON()
 		}
 	}
@@ -189,8 +189,9 @@ void scheduledHandler()
 // ============================== CONTROLLERS ==============================
 // =========================================================================
 
-void pidControlOFF()
+void pidControlOFF( boolean logging = false )
 {
+	if( logging ) log.debug "pidControlOFF"
 	state.iValue = 0.0
 	state.lastTemp = getTemp()
 	state.lastTime = getTime()
@@ -234,34 +235,42 @@ void pidControlON()
 	state.lastTime = currentTime
 }
 
-void forcedTempControlOFF()
+void forcedTempControlOFF( boolean logging = false)
 {
+	if (logging) log.debug "forcedTempControlOFF"
 	setCooling( false )
 }
 
-void forcedTempControlON()
+void forcedTempControlON( )
 {
+	log.debug "forcedTempControlON: settings.enableForced( $settings.enableForced )"
+	
 	if ( settings.enableForced )
 	{
-		forcedCoolingControl()
+		forcedCoolingControl( true )
 	}
 	
 }
 
 // @formatter:off
-void forcedCoolingControl()
+void forcedCoolingControl( boolean logging = false )
 {
 	// min temp shutoff
 	if ( getTemp() <= settings.minTemp )
+	{
+		log.warn "forcedCoolingControl: minTemp - triggered"
 		setCooling( false )
+	}
 		
 	// cooling control is enabled
-	else if ( settings.enableCoolingControl == true )
+	else if ( settings.enableCoolingControl )
 	{
+		if( logging ) log.debug "forcedCoolingControl: settings.enableCoolingControl( $settings.enableCoolingControl )"
+		
 		// turn OFF cooling device when currentTemp reaches targetTemp
 		if ( getTemp() <= settings.targetTemp )
 			setCooling( false )
-		
+			
 		// turn ON cooling device when currentTemp is above targetTemp
 		else if ( getTemp() > settings.targetTemp )
 			setCooling( true )
@@ -269,7 +278,10 @@ void forcedCoolingControl()
 	
 	// when cooling control is disabled, just turn on and leave on cooling. Unless minTemp was reached.
 	else
-		setCooling( true )
+	{
+		if( logging ) log.debug "forcedCoolingControl: settings.enableCoolingControl( $settings.enableCoolingControl )"
+		setCooling( true , true )
+	}
 }
 // @formatter:on
 
@@ -293,7 +305,7 @@ double getTemp( boolean logging = false )
 		temp = sum / state.numTempSensors
 	}
 	
-	if ( logging ) { log.debug( "TEMP: ( temp: $temp )" ) }
+	if ( logging ) log.debug "TEMP: ( temp: $temp )"
 	
 	return temp
 }
@@ -357,7 +369,7 @@ int setFan( double rawLevel , boolean logging = false)
 // @formatter:on
 
 // @formatter:off
-boolean setCooling( boolean on )
+boolean setCooling( boolean on , boolean logging = false )
 {
 	// turn off cooling
 	if ( state.coolingState == true && !on)
@@ -376,6 +388,8 @@ boolean setCooling( boolean on )
 			
 		state.coolingState = true
 	}
+	
+	if ( logging ) log.debug "setCooling: COOL( coolingState: $state.coolingState )"
 	
 	return state.coolingState
 }
