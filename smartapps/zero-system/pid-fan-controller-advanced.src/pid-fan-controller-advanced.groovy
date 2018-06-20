@@ -14,14 +14,14 @@
  *
  */
 definition(
-    name: "PID Fan Controller Advanced",
-    namespace: "zero-system",
-    author: "Zero_System",
-    description: "PID Fan Control. \r\nThis app varies a fan(s) speed, by using a dimmer. \r\nThe app is able to maintain a constant room temperature even if a heat source present, e.g. a computer.\r\nAdditional Functions: \r\n  1. Forced Heating and Cooling Control\r\n  2. Temperature Alarm",
-    category: "My Apps",
-    iconUrl: "https://s3.amazonaws.com/smartapp-icons/Convenience/Cat-Convenience.png",
-    iconX2Url: "https://s3.amazonaws.com/smartapp-icons/Convenience/Cat-Convenience@2x.png",
-    iconX3Url: "https://s3.amazonaws.com/smartapp-icons/Convenience/Cat-Convenience@2x.png")
+		name: "PID Fan Controller Advanced" ,
+		namespace: "zero-system" ,
+		author: "Zero_System" ,
+		description: "PID Fan Control. \r\nThis app varies a fan(s) speed, by using a dimmer. \r\nThe app is able to maintain a constant room temperature even if a heat source present, e.g. a computer.\r\nAdditional Functions: \r\n  1. Forced Heating and Cooling Control\r\n  2. Temperature Alarm" ,
+		category: "My Apps" ,
+		iconUrl: "https://s3.amazonaws.com/smartapp-icons/Convenience/Cat-Convenience.png" ,
+		iconX2Url: "https://s3.amazonaws.com/smartapp-icons/Convenience/Cat-Convenience@2x.png" ,
+		iconX3Url: "https://s3.amazonaws.com/smartapp-icons/Convenience/Cat-Convenience@2x.png" )
 
 
 // @formatter:off
@@ -79,10 +79,10 @@ preferences
 		
 		section( "Forced Cooling Temperature Control Settings" , hideable: true , hidden: true)
 		{
-			paragraph "Select the cooling device (switch), that Will cool room the room to Target Temperature: $settings.targetTemp"
-			input( title: "Cooling Device" , name: "forcedCooling" , type: "capability.switch" , multiple: true , required: false )
+			paragraph "Select the cooling device(s) (switch), that will cool room the room to Target Temperature: $settings.targetTemp"
+			input( title: "Cooling Device(s)" , name: "forcedCoolingDevices" , type: "capability.switch" , multiple: true , required: false )
 		
-			paragraph "Enable ON/OFF control? Some A/C have built in thermostat and just need to be powered on and not turned on/off. Will be turned off if temperature reaches"
+			paragraph "Enable ON/OFF control? Some A/C have a built in thermostat and just need to be powered on and not turned on/off. Will be turned off if temperature reaches Minimum Temperature"
 			input( title: "Enable ON/OFF Control" , name: "enableCoolingControl" , type: "bool" , required: false , defaultValue: false )
 		}
 		
@@ -109,19 +109,26 @@ def updated()
 def initialize()
 {
 	/*working variables*/
-	state.numTempSensors = settings.tempSensors.size()
+	state.numTempSensors = settings.tempSensors.size() // int
 	
-	state.iValue = 0.0
-	state.lastTemp = getTemp()
-	state.lastTime = getTime()
+	state.iValue = 0.0          // double
 	
-	state.fanState = enableFan()
-	state.lastFanLevel = setFan( 0.0 )
+	state.lastTemp = getTemp()  // double
+	state.lastTime = getTime()  // double
+	
+	state.fanState = true       // boolean
+	state.lastFanLevel = 0      // int
+	
+	state.coolingState = false  // boolean
 	
 	setPID()
 	
 	runPID()
 }
+
+// ========================================================================
+// ============================== SCHEDULERS ==============================
+// ========================================================================
 
 void runPID()
 {
@@ -163,23 +170,34 @@ void scheduledHandler()
 		log.debug "scheduledHandler: TIME( start: $startTime, stop: $stopTime, time: $currentTime, value: $withinTimeFrame )"
 		if ( withinTimeFrame )
 		{
-			calculatePID()
+			forcedTempControlOFF()
+			pidControlON()
 		}
 		else
 		{
-			state.iValue = 0.0
-			state.lastTemp = getTemp()
-			state.lastTime = getTime()
-			setFan( 0.0 )
+			pidControlOFF()
+			forcedTempControlON()
 		}
 	}
 	else
 	{
-		calculatePID()
+		pidControlON()
 	}
 }
 
-void calculatePID()
+// =========================================================================
+// ============================== CONTROLLERS ==============================
+// =========================================================================
+
+void pidControlOFF()
+{
+	state.iValue = 0.0
+	state.lastTemp = getTemp()
+	state.lastTime = getTime()
+	setFan( 0.0 )
+}
+
+void pidControlON()
 {
 	double currentTemp = getTemp( true )
 	
@@ -216,29 +234,48 @@ void calculatePID()
 	state.lastTime = currentTime
 }
 
-// @formatter:off
-int setFan( double rawLevel , boolean log = false)
+void forcedTempControlOFF()
 {
-	int boundedLevel
+	setCooling( false )
+}
+
+void forcedTempControlON()
+{
+	if ( settings.enableForced )
+	{
+		forcedCoolingControl()
+	}
 	
-	if      ( getTemp() < settings.minTemp )    boundedLevel = 0    // Min temp cutoff
-	else if ( fanState() ) 			            boundedLevel = 0    // Sentry value. If fan needs to be turned off
-	else if ( rawLevel < settings.minFanLevel )	boundedLevel = minFanLevel  // Min
-	else if ( rawLevel > 100 ) 				    boundedLevel = 100          // Max
-	else 										boundedLevel = ( int ) Math.round( rawLevel ) // Calculated
+}
+
+// @formatter:off
+void forcedCoolingControl()
+{
+	// min temp shutoff
+	if ( getTemp() <= settings.minTemp )
+		setCooling( false )
+		
+	// cooling control is enabled
+	else if ( settings.enableCoolingControl == true )
+	{
+		// turn OFF cooling device when currentTemp reaches targetTemp
+		if ( getTemp() <= settings.targetTemp )
+			setCooling( false )
+		
+		// turn ON cooling device when currentTemp is above targetTemp
+		else if ( getTemp() > settings.targetTemp )
+			setCooling( true )
+	}
 	
-	//	fans.setLevel( boundedLevel) // TODO: see if it sets all fan levels
-	
-	if ( boundedLevel != state.lastFanLevel )   // Prevent const commands being sent to controller if no change is detected.
-		for ( fan in settings.fans )
-			fan.setLevel( boundedLevel )
-	
-	
-	if (log) log.debug "OUTPUT: ( rawLevel: $rawLevel , boundedLevel: $boundedLevel )"
-	state.lastFanLevel = boundedLevel
-	return boundedLevel
+	// when cooling control is disabled, just turn on and leave on cooling. Unless minTemp was reached.
+	else
+		setCooling( true )
 }
 // @formatter:on
+
+// =====================================================================
+// ============================== GETTERS ==============================
+// =====================================================================
 
 // @formatter:off
 double getTemp( boolean log = false )
@@ -269,6 +306,16 @@ long getTime( boolean log = false )
 	return currentTime
 }
 
+boolean getFanState()
+{
+	if ( state.fanState == false ) log.debug( "FAN_STATE: OFF" )
+	return state.fanState
+}
+
+// =====================================================================
+// ============================== SETTERS ==============================
+// =====================================================================
+
 void setPID()
 {
 	if ( settings.reverseDirection )
@@ -285,12 +332,55 @@ void setPID()
 	}
 }
 
+// @formatter:off
+int setFan( double rawLevel , boolean log = false)
+{
+	int boundedLevel
+	
+	if      ( getTemp() < settings.minTemp )    boundedLevel = 0    // Min temp cutoff
+	else if ( getFanState() ) 			        boundedLevel = 0    // Sentry value. If fan needs to be turned off
+	else if ( rawLevel < settings.minFanLevel )	boundedLevel = minFanLevel  // Min
+	else if ( rawLevel > 100 ) 				    boundedLevel = 100          // Max
+	else 										boundedLevel = ( int ) Math.round( rawLevel ) // Calculated
+	
+	//	fans.setLevel( boundedLevel) // TODO: see if it sets all fan levels
+	
+	if ( boundedLevel != state.lastFanLevel )   // Prevent const commands being sent to controller if no change is detected.
+		for ( fan in settings.fans )
+			fan.setLevel( boundedLevel )
+	
+	
+	if (log) log.debug "OUTPUT: ( rawLevel: $rawLevel , boundedLevel: $boundedLevel )"
+	state.lastFanLevel = boundedLevel
+	return boundedLevel
+}
+// @formatter:on
+
+// @formatter:off
+boolean setCooling( boolean on )
+{
+	// turn off cooling
+	if ( state.coolingState == true && !on)
+	{
+		for ( device in settings.forcedCoolingDevices )
+			device.off()
+		
+		state.coolingState = false
+	}
+	
+	// turn on cooling
+	else if ( state.coolingState == false && on )
+	{
+		for( device in settings.forcedCoolingDevices )
+			device.on()
+			
+		state.coolingState = true
+	}
+	
+	return state.coolingState
+}
+// @formatter:on
+
 boolean disableFan() {return state.fanState = true}
 
 boolean enableFan() {return state.fanState = false}
-
-boolean fanState()
-{
-	if ( state.fanState ) log.debug( "FAN_STATE: OFF" )
-	return state.fanState
-}
