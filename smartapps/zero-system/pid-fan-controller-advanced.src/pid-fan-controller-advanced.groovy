@@ -58,8 +58,8 @@ preferences
 	
 	    section( "Time frame." , hideable: true , hidden: true )
 	    {
-	        input( title: "Start Time" , name: "startTime" , type: "time" , required: $enableTimeFrame , discription: "09:00" , defaultValue: "09:00" )
-	        input( title: "Stop Time" , name: "stopTime" , type: "time" , required: $enableTimeFrame , discription: "17:00" , defaultValue: "17:00")
+	        input( title: "Start Time" , name: "startTime" , type: "time" , required: $settings.enableTimeFrame , discription: "09:00" , defaultValue: "09:00" )
+	        input( title: "Stop Time" , name: "stopTime" , type: "time" , required: $settings.enableTimeFrame , discription: "17:00" , defaultValue: "17:00")
 	    }
 	
 	    section( "Set PID variables." , hideable: true , hidden: true )
@@ -79,10 +79,10 @@ preferences
 		
 		section( "Forced Cooling Temperature Control Settings" , hideable: true , hidden: true)
 		{
-			paragraph "Select the cooling device (switch), that Will cool room the room to Target Temperature: $targetTemp"
+			paragraph "Select the cooling device (switch), that Will cool room the room to Target Temperature: $settings.targetTemp"
 			input( title: "Cooling Device" , name: "forcedCooling" , type: "capability.switch" , multiple: true , required: false )
 		
-			paragraph "Enable ON/OFF control? Some A/C have built in thermostats and just need to be powered on and not turned on/off"
+			paragraph "Enable ON/OFF control? Some A/C have built in thermostat and just need to be powered on and not turned on/off. Will be turned off if temperature reaches"
 			input( title: "Enable ON/OFF Control" , name: "enableCoolingControl" , type: "bool" , required: false , defaultValue: false )
 		}
 		
@@ -256,7 +256,8 @@ double getTemp( boolean log = false )
 		temp = sum / state.numTempSensors
 	}
 	
-	if ( log) log.debug "TEMP: ( temp: $temp )"
+	if ( log ) { log.debug( "TEMP: ( temp: $temp )" ) }
+	
 	return temp
 }
 // @formatter:on
