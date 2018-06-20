@@ -93,7 +93,7 @@ def initialize()
 	state.lastTemp = getTemp()
 	state.lastTime = getTime()
 	
-	state.fanOff = turnFanOn()
+	state.fanState = enableFan()
 	state.lastFanLevel = setFan( 0.0 )
 	
 	setPID()
@@ -159,7 +159,7 @@ void scheduledHandler()
 
 void calculatePID()
 {
-	double currentTemp = getTemp()
+	double currentTemp = getTemp( true )
 	
 	/*How long since we last calculated*/
 	long currentTime = getTime()
@@ -187,7 +187,7 @@ void calculatePID()
 	double level = p + i - d
 	log.debug "PID: COMPUTE( P: $p , I: $i , D: $d )"
 	
-	setFan( level )
+	setFan( level , true )
 	
 	/*Remember some variables for next time*/
 	state.lastTemp = currentTemp
@@ -199,7 +199,7 @@ int setFan( double rawLevel , boolean log = false)
 {
 	int boundedLevel
 	
-	if      ( getTemp(  ) < settings.minTemp )  boundedLevel = 0    // Min temp cutoff
+	if      ( getTemp() < settings.minTemp )    boundedLevel = 0    // Min temp cutoff
 	else if ( fanState() ) 			            boundedLevel = 0    // Sentry value. If fan needs to be turned off
 	else if ( rawLevel < settings.minFanLevel )	boundedLevel = minFanLevel  // Min
 	else if ( rawLevel > 100 ) 				    boundedLevel = 100          // Max
@@ -264,12 +264,12 @@ void setPID()
 	}
 }
 
-boolean turnFanOff() {return state.fanOff = true}
+boolean disableFan() {return state.fanState = true}
 
-boolean turnFanOn() {return state.fanOff = false}
+boolean enableFan() {return state.fanState = false}
 
 boolean fanState()
 {
-	if ( state.fanOff ) log.debug( "FAN_STATE: OFF" )
-	return state.fanOff
+	if ( state.fanState ) log.debug( "FAN_STATE: OFF" )
+	return state.fanState
 }
