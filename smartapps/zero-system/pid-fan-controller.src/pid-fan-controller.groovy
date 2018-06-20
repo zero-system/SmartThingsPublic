@@ -193,7 +193,7 @@ int setFan( double rawLevel )
 	int boundedLevel
 	
 	if      ( getTemp(  ) < settings.minTemp )  boundedLevel = 0    // Min temp cutoff
-	else if ( state.fanOff ) 			        boundedLevel = 0    // Sentry value. If fan needs to be turned off
+	else if ( fanState() ) 			            boundedLevel = 0    // Sentry value. If fan needs to be turned off
 	else if ( rawLevel < settings.minFanLevel )	boundedLevel = minFanLevel  // Min
 	else if ( rawLevel > 100 ) 				    boundedLevel = 100          // Max
 	else 										boundedLevel = ( int ) Math.round( rawLevel ) // Calculated
@@ -251,3 +251,8 @@ void setPID()
 
 boolean turnFanOff() { return state.fanOff = true }
 boolean turnFanOn()  { return state.fanOff = false }
+boolean fanState()
+{
+	if ( state.fanOff ) log.debug( "FAN_STATE: OFF" )
+	return state.fanOff
+}
