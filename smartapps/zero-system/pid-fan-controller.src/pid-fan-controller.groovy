@@ -24,7 +24,7 @@ definition(
 		iconX2Url: "https://s3.amazonaws.com/smartapp-icons/Convenience/Cat-Convenience@2x.png" ,
 		iconX3Url: "https://s3.amazonaws.com/smartapp-icons/Convenience/Cat-Convenience@2x.png" )
 
-
+// @formatter:off
 preferences
 {
     section()
@@ -67,6 +67,7 @@ preferences
         input( title: "D Variable" , name: "dVar" , type: "decimal" , required: false , description: "10" , defaultValue: 10 )
     }
 }
+// @formatter:on
 
 def installed()
 {
@@ -88,14 +89,14 @@ def initialize()
 	/*working variables*/
 	state.numTempSensors = settings.tempSensors.size()
 	
-	state.iValue   = 0.0
+	state.iValue = 0.0
 	state.lastTemp = getTemp()
 	state.lastTime = getTime()
- 
-	state.fanOff       = turnFanOn()
+	
+	state.fanOff = turnFanOn()
 	state.lastFanLevel = setFan( 0.0 )
-    
-    setPID()
+	
+	setPID()
 	
 	runPID()
 }
@@ -131,29 +132,29 @@ void scheduledHandler()
 {
 	log.debug "=========================================="
 	
-    log.debug "timeFrameEnabled: $settings.enableTimeFrame"
-    if ( settings.enableTimeFrame )
-    {
-    	Date currentTime = new Date()
+	log.debug "timeFrameEnabled: $settings.enableTimeFrame"
+	if ( settings.enableTimeFrame )
+	{
+		Date currentTime = new Date()
 		boolean withinTimeFrame = timeOfDayIsBetween( settings.startTime , settings.stopTime , currentTime , location.timeZone )
-        
+		
 		log.debug "scheduledHandler: TIME( start: $startTime, stop: $stopTime, time: $currentTime, value: $withinTimeFrame )"
-        if ( withinTimeFrame ) 
-        {
-        	calculatePID()
-        }
-        else
-        {
-            state.iValue = 0.0
-            state.lastTemp = getTemp()
-            state.lastTime = getTime()
-            setFan( 0.0 )
-        }
-    }
-    else
-    {
-    	calculatePID()
-    }
+		if ( withinTimeFrame )
+		{
+			calculatePID()
+		}
+		else
+		{
+			state.iValue = 0.0
+			state.lastTemp = getTemp()
+			state.lastTime = getTime()
+			setFan( 0.0 )
+		}
+	}
+	else
+	{
+		calculatePID()
+	}
 }
 
 void calculatePID()
@@ -170,9 +171,10 @@ void calculatePID()
 	
 	state.iValue = ( state.iValue + ( state.ki * pValue ) )
 	
-	// Windup elimination. Clamps I value between min and 100
+	// @formatter:off //Windup elimination. Clamps I value between min and 100
 	if ( state.iValue < settings.minFanLevel )	state.iValue = minFanLevel
 	else if ( state.iValue > 100 )		        state.iValue = 100
+	// @formatter:on
 	
 	double dValue = currentTemp - state.lastTemp
 	
@@ -192,7 +194,8 @@ void calculatePID()
 	state.lastTime = currentTime
 }
 
-int setFan( double rawLevel )
+// @formatter:off
+int setFan( double rawLevel , boolean log = false)
 {
 	int boundedLevel
 	
@@ -205,15 +208,18 @@ int setFan( double rawLevel )
 	//	fans.setLevel( boundedLevel) // TODO: see if it sets all fan levels
 	
 	if ( boundedLevel != state.lastFanLevel )   // Prevent const commands being sent to controller if no change is detected.
-	for ( fan in settings.fans )
-		fan.setLevel( boundedLevel )
+		for ( fan in settings.fans )
+			fan.setLevel( boundedLevel )
 	
-	log.debug "OUTPUT: ( rawLevel: $rawLevel , boundedLevel: $boundedLevel )"
+	
+	if (log) log.debug "OUTPUT: ( rawLevel: $rawLevel , boundedLevel: $boundedLevel )"
 	state.lastFanLevel = boundedLevel
 	return boundedLevel
 }
+// @formatter:on
 
-double getTemp()
+// @formatter:off
+double getTemp( boolean log = false )
 {
 	double temp
 	
@@ -222,39 +228,46 @@ double getTemp()
 	{
 		double sum = 0.0
 		
+		
 		for ( sensor in settings.tempSensors )
 			sum += sensor.currentValue( "temperature" )
+		
 
 		temp = sum / state.numTempSensors
 	}
 	
-	log.debug "TEMP: ( temp: $temp )"
+	if ( log) log.debug "TEMP: ( temp: $temp )"
 	return temp
 }
+// @formatter:on
 
-long getTime()
+long getTime( boolean log = false )
 {
-	return now()
+	long currentTime = now()
+	if ( log ) log.debug( "getTime: $currentTime" )
+	return currentTime
 }
 
 void setPID()
 {
-	if (settings.reverseDirection)
-    {
-    	state.kp = settings.pVar
+	if ( settings.reverseDirection )
+	{
+		state.kp = settings.pVar
 		state.ki = settings.iVar
 		state.kd = settings.dVar
-    }
-    else
-    {
-        state.kp = 0 - settings.pVar
-        state.ki = 0 - settings.iVar
-        state.kd = 0 - settings.dVar
-    }
+	}
+	else
+	{
+		state.kp = 0 - settings.pVar
+		state.ki = 0 - settings.iVar
+		state.kd = 0 - settings.dVar
+	}
 }
 
-boolean turnFanOff() { return state.fanOff = true }
-boolean turnFanOn()  { return state.fanOff = false }
+boolean turnFanOff() {return state.fanOff = true}
+
+boolean turnFanOn() {return state.fanOff = false}
+
 boolean fanState()
 {
 	if ( state.fanOff ) log.debug( "FAN_STATE: OFF" )
