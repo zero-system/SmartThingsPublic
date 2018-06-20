@@ -161,14 +161,8 @@ void calculatePID()
 	double pValue = targetTemp - currentTemp
 	
 	state.iValue = ( state.iValue + ( state.ki * pValue ) )
-	if ( state.iValue < minFanLevel )
-	{
-		state.iValue = minFanLevel
-	}
-	else if ( state.iValue > 100 )
-	{
-		state.iValue = 100
-	}
+	if ( state.iValue < minFanLevel )	state.iValue = minFanLevel
+	else if ( state.iValue > 100 )		state.iValue = 100
 	
 	double dValue = currentTemp - state.lastTemp
 	
@@ -192,28 +186,15 @@ int setFan( double rawLevel )
 {
 	int boundedLevel
 	
-	if ( rawLevel < 0 )
-	{
-		boundedLevel = 0
-	}
-	else if ( rawLevel >= 0 && rawLevel < minFanLevel )
-	{
-		boundedLevel = minFanLevel
-	} // If calculated output is below the min threshold, set level to minLevelOutput.
-	else if ( rawLevel > 100 )
-	{
-		boundedLevel = 100
-	}
-	else
-	{
-		boundedLevel = ( int ) Math.round( rawLevel )
-	} // Else the output should be rounded to integer.
+	if ( rawLevel < 0 ) 								boundedLevel = 0
+	else if ( rawLevel >= 0 && rawLevel < minFanLevel )	boundedLevel = minFanLevel
+	else if ( rawLevel > 100 ) 							boundedLevel = 100
+	else 												boundedLevel = ( int ) Math.round( rawLevel )
+
 
 //	fans.setLevel( boundedLevel) // TODO: see if it sets all fan levels
 	for ( fan in fans )
-	{
 		fan.setLevel( boundedLevel )
-	}
 	
 	log.debug "OUTPUT: ( rawLevel: $rawLevel , boundedLevel: $boundedLevel )"
 	state.fanLevel = boundedLevel
@@ -224,20 +205,14 @@ double getTemp()
 {
 	double temp
 	
-	if ( state.numTempSensors == 1 )
-	{
-		temp = tempSensors.get( 0 ).currentValue( "temperature" )
-	}
-	
+	if ( state.numTempSensors == 1 ) temp = tempSensors.get( 0 ).currentValue( "temperature" )
 	else
 	{
 		double sum = 0.0
 		
 		for ( sensor in tempSensors )
-		{
 			sum += sensor.currentValue( "temperature" )
-		}
-		
+
 		temp = sum / state.numTempSensors
 	}
 	
