@@ -88,10 +88,11 @@ def initialize()
 	/*working variables*/
 	state.numTempSensors = settings.tempSensors.size()
 	
-	state.iValue = 0.0
+	state.iValue   = 0.0
 	state.lastTemp = getTemp()
 	state.lastTime = getTime()
-    
+ 
+	state.fanOff       = turnFanOn()
 	state.lastFanLevel = setFan( 0.0 )
     
     setPID()
@@ -192,13 +193,14 @@ int setFan( double rawLevel )
 	int boundedLevel
 	
 	if      ( getTemp(  ) < settings.minTemp )  boundedLevel = 0    // Min temp cutoff
-	else if ( rawLevel.equals( 0.0 ) ) 			boundedLevel = 0    // Sentry value. If fan needs to be turned off, use 0
+	else if ( state.fanOff ) 			        boundedLevel = 0    // Sentry value. If fan needs to be turned off
 	else if ( rawLevel < settings.minFanLevel )	boundedLevel = minFanLevel  // Min
 	else if ( rawLevel > 100 ) 				    boundedLevel = 100          // Max
 	else 										boundedLevel = ( int ) Math.round( rawLevel ) // Calculated
-
+	
+	//	fans.setLevel( boundedLevel) // TODO: see if it sets all fan levels
+	
 	if ( boundedLevel != state.lastFanLevel )   // Prevent const commands being sent to controller if no change is detected.
-//	fans.setLevel( boundedLevel) // TODO: see if it sets all fan levels
 	for ( fan in settings.fans )
 		fan.setLevel( boundedLevel )
 	
@@ -246,3 +248,6 @@ void setPID()
         state.kd = 0 - settings.dVar
     }
 }
+
+boolean turnFanOff() { return state.fanOff = true }
+boolean turnFanOn()  { return state.fanOff = false }
