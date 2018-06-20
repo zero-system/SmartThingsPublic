@@ -58,8 +58,8 @@ preferences
 	
 	    section( "Time frame." , hideable: true , hidden: true )
 	    {
-	        input( title: "Start Time" , name: "startTime" , type: "time" , required: $settings.enableTimeFrame , discription: "09:00" , defaultValue: "09:00" )
-	        input( title: "Stop Time" , name: "stopTime" , type: "time" , required: $settings.enableTimeFrame , discription: "17:00" , defaultValue: "17:00")
+	        input( title: "Start Time" , name: "startTime" , type: "time" , required: false , discription: "09:00" , defaultValue: "09:00" )
+	        input( title: "Stop Time" , name: "stopTime" , type: "time" , required: false , discription: "17:00" , defaultValue: "17:00")
 	    }
 	
 	    section( "Set PID variables." , hideable: true , hidden: true )
@@ -79,7 +79,7 @@ preferences
 		
 		section( "Forced Cooling Temperature Control Settings" , hideable: true , hidden: true)
 		{
-			paragraph "Select the cooling device(s) (switch), that will cool room the room to Target Temperature: $settings.targetTemp"
+			paragraph "Select the cooling device(s) (switch), that will cool room the room to Target Temperature"
 			input( title: "Cooling Device(s)" , name: "forcedCoolingDevices" , type: "capability.switch" , multiple: true , required: false )
 		
 			paragraph "Enable ON/OFF control? Some A/C have a built in thermostat and just need to be powered on and not turned on/off. Will be turned off if temperature reaches Minimum Temperature"
