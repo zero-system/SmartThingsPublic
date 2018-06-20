@@ -161,13 +161,13 @@ void scheduledHandler()
 {
 	log.debug "=========================================="
 	
-	log.debug "timeFrameEnabled: $settings.enableTimeFrame"
+	log.debug "scheduledHandler: TIME( timeFrameEnabled: $settings.enableTimeFrame )"
 	if ( settings.enableTimeFrame )
 	{
 		Date currentTime = new Date()
 		boolean withinTimeFrame = timeOfDayIsBetween( settings.startTime , settings.stopTime , currentTime , location.timeZone )
 		
-		log.debug "scheduledHandler: TIME( start: $startTime, stop: $stopTime, time: $currentTime, value: $withinTimeFrame )"
+		log.debug "scheduledHandler: TIME( withinTimeFrame: $withinTimeFrame )"
 		if ( withinTimeFrame )
 		{
 			forcedTempControlOFF()
@@ -278,7 +278,7 @@ void forcedCoolingControl()
 // =====================================================================
 
 // @formatter:off
-double getTemp( boolean log = false )
+double getTemp( boolean logging = false )
 {
 	double temp
 	
@@ -293,16 +293,16 @@ double getTemp( boolean log = false )
 		temp = sum / state.numTempSensors
 	}
 	
-	if ( log ) { log.debug( "TEMP: ( temp: $temp )" ) }
+	if ( logging ) { log.debug( "TEMP: ( temp: $temp )" ) }
 	
 	return temp
 }
 // @formatter:on
 
-long getTime( boolean log = false )
+long getTime( boolean logging = false )
 {
 	long currentTime = now()
-	if ( log ) log.debug( "getTime: $currentTime" )
+	if ( logging ) log.debug( "getTime: $currentTime" )
 	return currentTime
 }
 
@@ -333,7 +333,7 @@ void setPID()
 }
 
 // @formatter:off
-int setFan( double rawLevel , boolean log = false)
+int setFan( double rawLevel , boolean logging = false)
 {
 	int boundedLevel
 	
@@ -350,7 +350,7 @@ int setFan( double rawLevel , boolean log = false)
 			fan.setLevel( boundedLevel )
 	
 	
-	if (log) log.debug "OUTPUT: ( rawLevel: $rawLevel , boundedLevel: $boundedLevel )"
+	if ( logging ) log.debug "OUTPUT: ( rawLevel: $rawLevel , boundedLevel: $boundedLevel )"
 	state.lastFanLevel = boundedLevel
 	return boundedLevel
 }
