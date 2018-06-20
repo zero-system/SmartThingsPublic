@@ -37,6 +37,9 @@ preferences
 
         paragraph "Set the desired target temperature"
         input( title: "Target Temp" , name: "targetTemp" , type: "decimal" , required: true , description: "70 (deg)" , defaultValue: 70 )
+	
+	    paragraph "Set the minimum temperature. If the temperature reaches the set minimum, the fan will be turned off, overriding the minimum fan speed"
+	    input( title: "Minimum Temperature" , name: "minTemp" , type: "decimal" , required: true , description: "70 (deg)" , defaultValue: 65 )
 
         paragraph "Set the minimum fan speed. This prevents the fan from turning on and off at low speeds"
         input( title: "Minimum Fan Speed" , name: "minFanLevel" , type: "decimal" , required: true , description: "10%" , range: "0..100" , defaultValue: 10 )
@@ -83,13 +86,13 @@ def updated()
 def initialize()
 {
 	/*working variables*/
-	state.numTempSensors = tempSensors.size()
+	state.numTempSensors = settings.tempSensors.size()
 	
 	state.iValue = 0.0
 	state.lastTemp = getTemp()
 	state.lastTime = getTime()
     
-	state.fanLevel = setFan( 0 )
+	state.lastFanLevel = setFan( 0.0 )
     
     setPID()
 	
@@ -98,7 +101,7 @@ def initialize()
 
 void runPID()
 {
-	switch ( samplingTime )
+	switch ( samplingTime ) // Weird case values are smartthings enum weirdness
 	{
 		case "1-Minute":
 			runEvery1Minute( scheduledHandler )
@@ -130,7 +133,7 @@ void scheduledHandler()
     if ( timeFrameEnabled )
     {
     	Date currentTime = new Date()
-		boolean withinTimeFrame = timeOfDayIsBetween( startTime , stopTime , currentTime , location.timeZone )
+		boolean withinTimeFrame = timeOfDayIsBetween( settings.startTime , settings.stopTime , currentTime , location.timeZone )
 		//log.debug "scheduledHandler: TIME( start: $startTime, stop: $stopTime, time: $currentTime, value: $withinTimeFrame )"
     
         if ( withinTimeFrame ) calculatePID()
@@ -140,8 +143,8 @@ void scheduledHandler()
             log.debug "OUTSIDE TIME FRAME"
             state.iValue = 0.0
             state.lastTemp = getTemp()
-            state.lastTime = now()
-            setFan( 0 )
+            state.lastTime = getTime()
+            setFan( 0.0 )
         }
     }
     else
@@ -158,11 +161,13 @@ void calculatePID()
 	log.debug "PID: TIME( timeChange: $timeChange (sec) )"
 	
 	/*Compute all the working error variables*/
-	double pValue = targetTemp - currentTemp
+	double pValue = settings.targetTemp - currentTemp
 	
 	state.iValue = ( state.iValue + ( state.ki * pValue ) )
-	if ( state.iValue < minFanLevel )	state.iValue = minFanLevel
-	else if ( state.iValue > 100 )		state.iValue = 100
+	
+	// Windup elimination. Clamps I value between min and 100
+	if ( state.iValue < settings.minFanLevel )	state.iValue = minFanLevel
+	else if ( state.iValue > 100 )		        state.iValue = 100
 	
 	double dValue = currentTemp - state.lastTemp
 	
@@ -186,18 +191,19 @@ int setFan( double rawLevel )
 {
 	int boundedLevel
 	
-	if ( rawLevel < 0 ) 								boundedLevel = 0
-	else if ( rawLevel >= 0 && rawLevel < minFanLevel )	boundedLevel = minFanLevel
-	else if ( rawLevel > 100 ) 							boundedLevel = 100
-	else 												boundedLevel = ( int ) Math.round( rawLevel )
+	if      ( getTemp(  ) < settings.minTemp )                      boundedLevel = 0    // Min temp cutoff
+	else if ( rawLevel < 0 ) 							            boundedLevel = 0    // Sentry value. If fan needs to be turned off, use -1
+	else if ( 0 <= rawLevel && rawLevel < settings.minFanLevel )	boundedLevel = minFanLevel  // Min
+	else if ( rawLevel > 100 ) 							            boundedLevel = 100          // Max
+	else 												            boundedLevel = ( int ) Math.round( rawLevel ) // Calculated
 
-
+	if ( boundedLevel != state.lastFanLevel )   // Prevent const commands being sent to controller if no change is detected.
 //	fans.setLevel( boundedLevel) // TODO: see if it sets all fan levels
-	for ( fan in fans )
+	for ( fan in settings.fans )
 		fan.setLevel( boundedLevel )
 	
 	log.debug "OUTPUT: ( rawLevel: $rawLevel , boundedLevel: $boundedLevel )"
-	state.fanLevel = boundedLevel
+	state.lastFanLevel = boundedLevel
 	return boundedLevel
 }
 
@@ -205,12 +211,12 @@ double getTemp()
 {
 	double temp
 	
-	if ( state.numTempSensors == 1 ) temp = tempSensors.get( 0 ).currentValue( "temperature" )
+	if ( state.numTempSensors == 1 ) temp = settings.tempSensors.get( 0 ).currentValue( "temperature" )
 	else
 	{
 		double sum = 0.0
 		
-		for ( sensor in tempSensors )
+		for ( sensor in settings.tempSensors )
 			sum += sensor.currentValue( "temperature" )
 
 		temp = sum / state.numTempSensors
@@ -229,14 +235,14 @@ void setPID()
 {
 	if (settings.reverseDirection)
     {
-    	state.kp = pVar
-		state.ki = iVar
-		state.kd = dVar
+    	state.kp = settings.pVar
+		state.ki = settings.iVar
+		state.kd = settings.dVar
     }
     else
     {
-        state.kp = 0 - pVar
-        state.ki = 0 - iVar
-        state.kd = 0 - dVar
+        state.kp = 0 - settings.pVar
+        state.ki = 0 - settings.iVar
+        state.kd = 0 - settings.dVar
     }
 }
