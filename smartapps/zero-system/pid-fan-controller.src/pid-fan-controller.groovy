@@ -131,17 +131,19 @@ void scheduledHandler()
 {
 	log.debug "=========================================="
 	
-    if ( timeFrameEnabled )
+    log.debug "timeFrameEnabled: $settings.enableTimeFrame"
+    if ( settings.enableTimeFrame )
     {
     	Date currentTime = new Date()
 		boolean withinTimeFrame = timeOfDayIsBetween( settings.startTime , settings.stopTime , currentTime , location.timeZone )
-		//log.debug "scheduledHandler: TIME( start: $startTime, stop: $stopTime, time: $currentTime, value: $withinTimeFrame )"
-    
-        if ( withinTimeFrame ) calculatePID()
-
+        
+		log.debug "scheduledHandler: TIME( start: $startTime, stop: $stopTime, time: $currentTime, value: $withinTimeFrame )"
+        if ( withinTimeFrame ) 
+        {
+        	calculatePID()
+        }
         else
         {
-            log.debug "OUTSIDE TIME FRAME"
             state.iValue = 0.0
             state.lastTemp = getTemp()
             state.lastTime = getTime()
@@ -149,7 +151,9 @@ void scheduledHandler()
         }
     }
     else
+    {
     	calculatePID()
+    }
 }
 
 void calculatePID()
