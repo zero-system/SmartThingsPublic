@@ -136,7 +136,7 @@ def initialize()
 	
 	state.fanState = true // boolean
 	state.lastFanLevel = 0 // int
-    state.maxFanLevel = 99.0 // double
+	state.maxFanLevel = 99.0 // double
 	
 	state.coolingState = false // boolean
 	
@@ -210,7 +210,7 @@ void scheduledHandler()
 
 void pidControlOFF( boolean logging = false )
 {
-	if( logging ) log.debug "pidControlOFF"
+	if ( logging ) log.debug "pidControlOFF"
 	state.iValue = 0.0
 	state.lastTemp = getTemp()
 	state.lastTime = getTime()
@@ -254,13 +254,13 @@ void pidControlON()
 	state.lastTime = currentTime
 }
 
-void forcedTempControlOFF( boolean logging = false)
+void forcedTempControlOFF( boolean logging = false )
 {
-	if (logging) log.debug "forcedTempControlOFF"
+	if ( logging ) log.debug "forcedTempControlOFF"
 	setCooling( false )
 }
 
-void forcedTempControlON( )
+void forcedTempControlON()
 {
 	log.debug "forcedTempControlON: settings.enableForced( $settings.enableForced )"
 	
@@ -329,11 +329,11 @@ double getTemp( boolean logging = false )
     {
 		// alerts user if temp is below min temp and 
         if ( temp < settings.minTemp )
-			triggerAlert( "Minimum Temperature Alarm Triggered. Current Temperature: $temp" )
+			triggerAlert( "Minimum Temperature Alarm Triggered. Current Temperature: $temp" as String )
 
         // alerts user if temp is below max temp and user has alerts enabled. Will trigger every alert hour
         if ( temp > settings.maxTemp )
-			triggerAlert( "Maximum Temperature Alarm Triggered. Current Temperature: $temp" )
+			triggerAlert( "Maximum Temperature Alarm Triggered. Current Temperature: $temp" as String )
     }
 	
 	if ( logging ) log.debug "TEMP: ( temp: $temp )"
@@ -359,12 +359,12 @@ boolean afterAlertTime( boolean logging = false )
 {
 	boolean alert = false
 	long currentTime = getTime()
-    
-	if( state.lastAlertTime < currentTime ) alert = true
-
-    if ( logging ) log.info( "afterAlertTime: lastAlertTime($state.lastAlertTime) , currentTime($currentTime) , alert($alert)" )
-    
-    return alert
+	
+	if ( state.lastAlertTime < currentTime ) alert = true
+	
+	if ( logging ) log.info( "afterAlertTime: lastAlertTime($state.lastAlertTime) , currentTime($currentTime) , alert($alert)" )
+	
+	return alert
 }
 
 // =====================================================================
@@ -445,7 +445,7 @@ boolean enableFan() {return state.fanState = false}
 
 void triggerAlert( String alertMessage )
 {
-    sendPush( alertMessage )
-    log.warn( alertMessage )
-    state.lastAlertTime = ( getTime() + (3600 * 1000) ) // next alert time set for hour in future
+	sendPush( alertMessage )
+	log.warn( alertMessage )
+	state.lastAlertTime = ( getTime() + ( 3600 * 1000 ) ) // next alert time set for hour in future
 }
