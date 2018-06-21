@@ -88,7 +88,7 @@ preferences
 	    }
 	}
 	
-	page( name: "settingsForced" , title: "Forced Temperature Control Settings" )
+	page( name: "settingsForced" , title: "Forced Temperature Control Settings" , install: true )
 	{
 		section( "Enable forced temperature control when outside \"PID Time Frame\"" )
 		{
