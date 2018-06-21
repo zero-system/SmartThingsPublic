@@ -132,7 +132,7 @@ def initialize()
 	
 	state.lastTemp = getTemp() // double
 	state.lastTime = getTime() // double
-	state.lastAlert = new Date() // Date
+	state.lastAlertTime = getTime() // long
 	
 	state.fanState = true // boolean
 	state.lastFanLevel = 0 // int
@@ -323,19 +323,23 @@ double getTemp( boolean logging = false )
 		temp = sum / state.numTempSensors
 	}
 	
-	// alerts user if temp is below min temp and user has alerts enabled. Will trigger every alert hour
-	if ( temp < settings.minTemp )
-	{
-		if ( settings.sendPush && afterAlertTime( true ) ) sendPush( "Minimum Temperature Alarm Triggered. Current Temperature: $temp" )
-		log.warn( "Minimum Temperature Alarm Triggered. Current Temperature: $temp" )
-	}
-	
-	// alerts user if temp is below max temp and user has alerts enabled. Will trigger every alert hour
-	if ( temp > settings.maxTemp )
-	{
-		if ( settings.sendPush && afterAlertTime( true ) ) sendPush( "Maximum Temperature Alarm Triggered. Current Temperature: $temp" )
-		log.warn( "Maximum Temperature Alarm Triggered. Current Temperature: $temp" )
-	}
+    // if min/max alerts are enabled, will trigger an every alert hour
+    if ( settings.sendPush && afterAlertTime( true ) )
+    {
+		// alerts user if temp is below min temp and 
+        if ( temp < settings.minTemp )
+        {
+            sendPush( "Minimum Temperature Alarm Triggered. Current Temperature: $temp" )
+            log.warn( "Minimum Temperature Alarm Triggered. Current Temperature: $temp" )
+        }
+
+        // alerts user if temp is below max temp and user has alerts enabled. Will trigger every alert hour
+        if ( temp > settings.maxTemp )
+        {
+            sendPush( "Maximum Temperature Alarm Triggered. Current Temperature: $temp" )
+            log.warn( "Maximum Temperature Alarm Triggered. Current Temperature: $temp" )
+        }
+    }
 	
 	if ( logging ) log.debug "TEMP: ( temp: $temp )"
 	
@@ -358,14 +362,17 @@ boolean getFanState()
 
 boolean afterAlertTime( boolean logging = false )
 {
-	long currentTime = getTime()
-	boolean alert = state.lastAlertTime.after(currentTime)
+	boolean alert = false
 	
-	if ( logging ) log.info( "afterAlertTime: lastAlertTime($state.lastAlertTime) , alert($alert)" )
-	
-	if( alert ) state.lastAlertTime = new Date( now() + (3600 * 1000) ) // next alert time set for hour in future
-	
-	return alert
+	if( state.lastAlertTime < getTime() ) 
+    {
+    	alert = true
+    	state.lastAlertTime = ( getTime() + (3600 * 1000) ) // next alert time set for hour in future
+    }
+    
+    if ( logging ) log.info( "afterAlertTime: lastAlertTime($state.lastAlertTime) , alert($alert)" )
+    
+    return alert
 }
 
 // =====================================================================
