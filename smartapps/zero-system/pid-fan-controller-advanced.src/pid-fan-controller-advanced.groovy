@@ -27,48 +27,67 @@ definition(
 // @formatter:off
 preferences
 {
-	page( name: "settingsPID" , title: "PID Control Settings" , nextPage: "settingsForced" )
+	page( name: "settingsTemp" , title: "Temperature Settings" , nextPage: "settingsPID" )
 	{
-	    section()
-	    {
-	        paragraph "Choose a temperature sensor. If multiple temp sensors are choosen, the average will be taken"
+		section()
+		{
+	        paragraph "Choose a temperature sensor. If multiple temp sensors are chosen, the average will be taken"
 	        input( title: "Temperature Sensor(s)" , name: "tempSensors" , type: "capability.temperatureMeasurement" , multiple: true , required: true )
-	
-	        paragraph "Select the cooling fan controller (dimmer)"
-	        input( title: "Fan Controller(s)" , name: "fans" , type: "capability.switchLevel" , multiple: true , required: true )
-	
+			
 	        paragraph "Set the desired target temperature"
 	        input( title: "Target Temp" , name: "targetTemp" , type: "decimal" , required: true , description: "70 (deg)" , defaultValue: 70 )
 		
-		    paragraph "Set the minimum temperature. If the temperature reaches the set minimum, the fan will be turned off, overriding the minimum fan speed"
-		    input( title: "Minimum Temperature" , name: "minTemp" , type: "decimal" , required: true , description: "70 (deg)" , defaultValue: 65 )
+		    paragraph "Set the minimum temperature. If the temperature reaches the set minimum, the fan will be turned off and an alert is triggered (if enabled)"
+		    input( title: "Minimum Temperature" , name: "minTemp" , type: "decimal" , required: true , description: "60 (deg)" , defaultValue: 60 )
+			
+			paragraph "Set the maximum temperature. If the temperature reaches the set maximum, an alert is triggered (if enabled)"
+		    input( title: "Maximum Temperature" , name: "maxTemp" , type: "decimal" , required: true , description: "90 (deg)" , defaultValue: 90 )
+			
+			paragraph "Enable alerts for max/min temperature alarms?"
+	        input( title: "Enable Alerts" , name: "sendPush" , type: "bool" , required: true , defaultValue: false )
+		}
+	}
+	
+	page( name: "settingsPID" , title: "PID Control Settings" , nextPage: "settingsScheduling" )
+	{
+	    section()
+	    {
+	        paragraph "Select the fan controller (dimmer)"
+	        input( title: "Fan Controller(s)" , name: "fans" , type: "capability.switchLevel" , multiple: true , required: true )
 	
 	        paragraph "Set the minimum fan speed. This prevents the fan from turning on and off at low speeds"
 	        input( title: "Minimum Fan Speed" , name: "minFanLevel" , type: "decimal" , required: true , description: "10%" , range: "0..100" , defaultValue: 10 )
-	
-	        paragraph "Sampling Time. It is the time between each measurement. Lower time means a faster rate of adjustment"
-	        input( title: "Sampling Time" , name: "samplingTime" , type: "enum" , required: true , options: ["1-Minute" , "5-Minutes" , "10-Minutes" , "15-Minutes"] , defaultValue: "1-Minute" )
 	        
-	        paragraph "Reverse control direction. Enable to reverse the direction of control. For example, heating."
+	        paragraph "Reverse control direction. Enable to reverse the direction of control. For example, heating"
 	        input( title: "Reverse Control Direction" , name: "reverseDirection" , type: "bool" , required: true , defaultValue: false )
-	        
-	        paragraph "Enable PID Control during time frame. Set time frame below. For example, 09:00 - 17:00"
-	        input( title: "Enable Time Frame" , name: "enableTimeFrame" , type: "bool" , required: true , defaultValue: false )
-	    }
+        }
 	
-	    section( "Time frame." , hideable: true , hidden: true )
-	    {
-	        input( title: "Start Time" , name: "startTime" , type: "time" , required: false , discription: "09:00" , defaultValue: "09:00" )
-	        input( title: "Stop Time" , name: "stopTime" , type: "time" , required: false , discription: "17:00" , defaultValue: "17:00")
-	    }
-	
-	    section( "Set PID variables." , hideable: true , hidden: true )
+	    section( "Set PID variables" , hideable: true , hidden: true )
 	    {
 	        input( title: "P Variable" , name: "pVar" , type: "decimal" , required: false , description: "20" , defaultValue: 20 )
 	        input( title: "I Variable" , name: "iVar" , type: "decimal" , required: false , description: "1" , defaultValue: 1 )
 	        input( title: "D Variable" , name: "dVar" , type: "decimal" , required: false , description: "10" , defaultValue: 10 )
 	    }
 	}
+	
+	page( name: "settingsScheduling" , title: "Scheduling Settings" , nextPage: "settingsForced" )
+	{
+		section()
+		{
+	        paragraph "Sampling Time. It is the time between each measurement. Lower time means a faster rate of adjustment"
+	        input( title: "Sampling Time" , name: "samplingTime" , type: "enum" , required: true , options: ["1-Minute" , "5-Minutes" , "10-Minutes" , "15-Minutes"] , defaultValue: "1-Minute" )
+		
+	        paragraph "Enable PID Control during time frame. Set time frame below. For example, 09:00 - 17:00"
+	        input( title: "Enable Time Frame" , name: "enableTimeFrame" , type: "bool" , required: true , defaultValue: false )
+		}
+	
+	    section( "Time Frame" , hideable: true , hidden: true )
+	    {
+	        input( title: "Start Time" , name: "startTime" , type: "time" , required: false , discription: "09:00" , defaultValue: "09:00" )
+	        input( title: "Stop Time" , name: "stopTime" , type: "time" , required: false , discription: "17:00" , defaultValue: "17:00")
+	    }
+	}
+	
 	page( name: "settingsForced" , title: "Forced Temperature Control Settings" )
 	{
 		section( "Enable forced temperature control when outside \"PID Time Frame\"" )
@@ -82,11 +101,9 @@ preferences
 			paragraph "Select the cooling device(s) (switch), that will cool room the room to Target Temperature"
 			input( title: "Cooling Device(s)" , name: "forcedCoolingDevices" , type: "capability.switch" , multiple: true , required: false )
 		
-			paragraph "Enable ON/OFF control? Some A/C have a built in thermostat and just need to be powered on and not turned on/off. Will be turned off if temperature reaches Minimum Temperature"
+			paragraph "Enable ON/OFF control? Some A/C have a built in thermostat and just need to be powered on and not turned ON/OFF. Will be turned off if temperature reaches Minimum Temperature"
 			input( title: "Enable ON/OFF Control" , name: "enableCoolingControl" , type: "bool" , required: false , defaultValue: false )
 		}
-		
-		
 	}
 }
 // @formatter:on
@@ -115,6 +132,7 @@ def initialize()
 	
 	state.lastTemp = getTemp() // double
 	state.lastTime = getTime() // double
+	state.lastAlert = new Date() // Date
 	
 	state.fanState = true // boolean
 	state.lastFanLevel = 0 // int
@@ -305,6 +323,20 @@ double getTemp( boolean logging = false )
 		temp = sum / state.numTempSensors
 	}
 	
+	// alerts user if temp is below min temp and user has alerts enabled. Will trigger every alert hour
+	if ( temp < settings.minTemp )
+	{
+		if ( settings.sendPush && afterAlertTime( true ) ) sendPush( "Minimum Temperature Alarm Triggered. Current Temperature: $temp" )
+		log.warn( "Minimum Temperature Alarm Triggered. Current Temperature: $temp" )
+	}
+	
+	// alerts user if temp is below max temp and user has alerts enabled. Will trigger every alert hour
+	if ( temp > settings.maxTemp )
+	{
+		if ( settings.sendPush && afterAlertTime( true ) ) sendPush( "Maximum Temperature Alarm Triggered. Current Temperature: $temp" )
+		log.warn( "Maximum Temperature Alarm Triggered. Current Temperature: $temp" )
+	}
+	
 	if ( logging ) log.debug "TEMP: ( temp: $temp )"
 	
 	return temp
@@ -320,8 +352,20 @@ long getTime( boolean logging = false )
 
 boolean getFanState()
 {
-	if ( state.fanState == false ) log.debug( "FAN_STATE: OFF" )
+	if ( !state.fanState ) log.debug( "FAN_STATE: OFF" )
 	return state.fanState
+}
+
+boolean afterAlertTime( boolean logging = false )
+{
+	long currentTime = getTime()
+	boolean alert = state.lastAlertTime.after(currentTime)
+	
+	if ( logging ) log.info( "afterAlertTime: lastAlertTime($state.lastAlertTime) , alert($alert)" )
+	
+	if( alert ) state.lastAlertTime = new Date( now() + (3600 * 1000) ) // next alert time set for hour in future
+	
+	return alert
 }
 
 // =====================================================================
@@ -355,8 +399,6 @@ int setFan( double rawLevel , boolean logging = false)
 	else if ( rawLevel > 100 ) 				    boundedLevel = 100          // Max
 	else 										boundedLevel = ( int ) Math.round( rawLevel ) // Calculated
 	
-	//	fans.setLevel( boundedLevel) // TODO: see if it sets all fan levels
-	
 	if ( boundedLevel != state.lastFanLevel )   // Prevent const commands being sent to controller if no change is detected.
 		for ( fan in settings.fans )
 			fan.setLevel( boundedLevel )
@@ -372,7 +414,7 @@ int setFan( double rawLevel , boolean logging = false)
 boolean setCooling( boolean on , boolean logging = false )
 {
 	// turn off cooling
-	if ( state.coolingState == true && !on)
+	if ( state.coolingState && !on)
 	{
 		for ( device in settings.forcedCoolingDevices )
 			device.off()
@@ -381,7 +423,7 @@ boolean setCooling( boolean on , boolean logging = false )
 	}
 	
 	// turn on cooling
-	else if ( state.coolingState == false && on )
+	else if ( !state.coolingState && on )
 	{
 		for( device in settings.forcedCoolingDevices )
 			device.on()
