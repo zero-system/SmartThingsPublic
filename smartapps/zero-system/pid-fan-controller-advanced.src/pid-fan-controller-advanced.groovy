@@ -136,6 +136,7 @@ def initialize()
 	
 	state.fanState = true // boolean
 	state.lastFanLevel = 0 // int
+    state.maxFanLevel = 99.0 // double
 	
 	state.coolingState = false // boolean
 	
@@ -231,8 +232,8 @@ void pidControlON()
 	state.iValue = ( state.iValue + ( state.ki * pValue ) )
 	
 	// @formatter:off //Windup elimination. Clamps I value between min and 100
-	if ( state.iValue < settings.minFanLevel )	state.iValue = minFanLevel
-	else if ( state.iValue > 100 )		        state.iValue = 100
+	if ( state.iValue < settings.minFanLevel )	 state.iValue = settings.minFanLevel
+	else if ( state.iValue > state.maxFanLevel ) state.iValue = state.maxFanLevel
 	// @formatter:on
 	
 	double dValue = currentTemp - state.lastTemp
@@ -324,21 +325,15 @@ double getTemp( boolean logging = false )
 	}
 	
     // if min/max alerts are enabled, will trigger an every alert hour
-    if ( settings.sendPush && afterAlertTime( true ) )
+    if ( settings.sendPush && afterAlertTime() )
     {
 		// alerts user if temp is below min temp and 
         if ( temp < settings.minTemp )
-        {
-            sendPush( "Minimum Temperature Alarm Triggered. Current Temperature: $temp" )
-            log.warn( "Minimum Temperature Alarm Triggered. Current Temperature: $temp" )
-        }
+			triggerAlert( "Minimum Temperature Alarm Triggered. Current Temperature: $temp" )
 
         // alerts user if temp is below max temp and user has alerts enabled. Will trigger every alert hour
         if ( temp > settings.maxTemp )
-        {
-            sendPush( "Maximum Temperature Alarm Triggered. Current Temperature: $temp" )
-            log.warn( "Maximum Temperature Alarm Triggered. Current Temperature: $temp" )
-        }
+			triggerAlert( "Maximum Temperature Alarm Triggered. Current Temperature: $temp" )
     }
 	
 	if ( logging ) log.debug "TEMP: ( temp: $temp )"
@@ -363,14 +358,11 @@ boolean getFanState()
 boolean afterAlertTime( boolean logging = false )
 {
 	boolean alert = false
-	
-	if( state.lastAlertTime < getTime() ) 
-    {
-    	alert = true
-    	state.lastAlertTime = ( getTime() + (3600 * 1000) ) // next alert time set for hour in future
-    }
+	long currentTime = getTime()
     
-    if ( logging ) log.info( "afterAlertTime: lastAlertTime($state.lastAlertTime) , alert($alert)" )
+	if( state.lastAlertTime < currentTime ) alert = true
+
+    if ( logging ) log.info( "afterAlertTime: lastAlertTime($state.lastAlertTime) , currentTime($currentTime) , alert($alert)" )
     
     return alert
 }
@@ -398,21 +390,24 @@ void setPID()
 // @formatter:off
 int setFan( double rawLevel , boolean logging = false)
 {
-	int boundedLevel
+	int boundedLevel = state.lastFanLevel
 	
 	if      ( getTemp() < settings.minTemp )    boundedLevel = 0    // Min temp cutoff
 	else if ( !getFanState() ) 			        boundedLevel = 0    // Sentry value. If fan needs to be turned off
-	else if ( rawLevel < settings.minFanLevel )	boundedLevel = minFanLevel  // Min
-	else if ( rawLevel > 100 ) 				    boundedLevel = 100          // Max
+	else if ( rawLevel < settings.minFanLevel )	boundedLevel = settings.minFanLevel  	   // Min
+	else if ( rawLevel > state.maxFanLevel ) 	boundedLevel = ( int ) state.maxFanLevel   		   // Max
 	else 										boundedLevel = ( int ) Math.round( rawLevel ) // Calculated
+
+    // Prevent const commands being sent to controller if no change is detected.
+	for ( fan in settings.fans )
+    	if ( boundedLevel != state.lastFanLevel || fan.currentValue( "level" ) != boundedLevel )  
+        	fan.setLevel( boundedLevel )
 	
-	if ( boundedLevel != state.lastFanLevel )   // Prevent const commands being sent to controller if no change is detected.
-		for ( fan in settings.fans )
-			fan.setLevel( boundedLevel )
+    state.lastFanLevel = boundedLevel
+    
+	int currentLevel = settings.fans.get(0).currentValue( "level" )
+	if ( logging ) log.debug "OUTPUT: ( rawLevel: $rawLevel , boundedLevel: $boundedLevel , currentLevel: $currentLevel )"
 	
-	
-	if ( logging ) log.debug "OUTPUT: ( rawLevel: $rawLevel , boundedLevel: $boundedLevel )"
-	state.lastFanLevel = boundedLevel
 	return boundedLevel
 }
 // @formatter:on
@@ -447,3 +442,10 @@ boolean setCooling( boolean on , boolean logging = false )
 boolean disableFan() {return state.fanState = true}
 
 boolean enableFan() {return state.fanState = false}
+
+void triggerAlert( String alertMessage )
+{
+    sendPush( alertMessage )
+    log.warn( alertMessage )
+    state.lastAlertTime = ( getTime() + (3600 * 1000) ) // next alert time set for hour in future
+}
