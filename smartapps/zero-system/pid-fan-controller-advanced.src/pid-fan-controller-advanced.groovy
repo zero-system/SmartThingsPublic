@@ -415,23 +415,40 @@ int setFan( double rawLevel , boolean logging = false)
 // @formatter:off
 boolean setCooling( boolean on , boolean logging = false )
 {
+    boolean newState = state.coolingState
 	// prevent repeated commands being sent or if state changed
 	for ( device in settings.forcedCoolingDevices )
 	{
-		def test = device.currentValue( "value" )
-		log.debug "test: $test"
-		if ( state.coolingState && !on )        // turn off cooling.
+		boolean currentState = device.currentSwitch == "on"
+        
+        boolean turnOFF_lastStateON = !on &&  state.coolingState
+        boolean turnON_lastStateOFF =  on && !state.coolingState
+        
+        boolean turnOFF_currentStateON_diff_lastStateOFF = !on && (currentState != state.coolingState)
+        boolean turnON_currentStateOFF_diff_lastStateON  =  on && (currentState != state.coolingState)
+        
+		if ( logging) 
+        {
+        	log.debug "setCooling: currentCommand($on)"
+        	log.debug "setCooling: $device CURRENT_STATE($currentState)"
+            log.debug "setCooling: OFF_LOGIC($turnOFF_lastStateON , $turnOFF_currentStateON_diff_lastStateOFF)"
+            log.debug "setCooling:  ON_LOGIC($turnON_lastStateOFF , $turnON_currentStateOFF_diff_lastStateON)"
+        }
+        
+        // current command matches state, do nothing. OR currentState does not match last coolingState and command is off, turn off
+		if ( turnOFF_lastStateON || turnOFF_currentStateON_diff_lastStateOFF )       // turn off cooling.
 		{
 			device.off()
-			state.coolingState = false
+            newState = false
 		}
-
-		else if ( !state.coolingState && on )   // turn on cooling
+		else if ( turnON_lastStateOFF || turnON_currentStateOFF_diff_lastStateON )   // turn on cooling
 		{
 			device.on()
-			state.coolingState = true
+            newState = true
 		}
 	}
+    
+    state.coolingState = newState
 	
 	if ( logging ) log.debug "setCooling: COOL( coolingState: $state.coolingState )"
 	
