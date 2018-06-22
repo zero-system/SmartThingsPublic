@@ -81,7 +81,7 @@ preferences
 	        input( title: "Enable Time Frame" , name: "enableTimeFrame" , type: "bool" , required: true , defaultValue: false )
 		}
 	
-	    section( "Time Frame" , hideable: true , hidden: true )
+	    section( "Time Frame" , hideable: true , hidden: false )
 	    {
 	        input( title: "Start Time" , name: "startTime" , type: "time" , required: false , discription: "09:00" , defaultValue: "09:00" )
 	        input( title: "Stop Time" , name: "stopTime" , type: "time" , required: false , discription: "17:00" , defaultValue: "17:00")
@@ -96,7 +96,7 @@ preferences
 			input( title: "Enable Active Temperature Control" , name: "enableActive" , type: "bool" , required: true , defaultValue: false )
 		}
 		
-		section( "Forced Cooling Temperature Control Settings" , hideable: true , hidden: true)
+		section( "Active Cooling Temperature Control Settings" , hideable: true , hidden: true)
 		{
 			paragraph "Select the cooling device(s) (switch), that will cool room the room to Target Temperature"
 			input( title: "Cooling Device(s)" , name: "activeCoolingDevices" , type: "capability.switch" , multiple: true , required: false )
@@ -261,48 +261,43 @@ void pidControlON()
 void activeTempControlOFF( boolean logging = false )
 {
 	if ( logging ) log.debug "activeTempControlOFF"
-	//setSwitch( OFF() , settings.activeCoolingDevices , state.lastCoolingState )
+	state.lastCoolingState = setSwitch( OFF() , settings.activeCoolingDevices , state.lastCoolingState , true )
 }
 
 void activeTempControlON( boolean logging = false )
 {
 	if ( logging ) log.debug "activeTempControlON: settings.enableActive( $settings.enableActive )"
-	if ( settings.enableActive ) activeCoolingControl( true )
+	if ( settings.enableActive ) activeCooling( true )
 }
 
 
-void activeCoolingControl( boolean logging = false )
+void activeCooling( boolean logging = false )
 {
 	if ( logging ) log.debug "activeCoolingControl: settings.enableCoolingControl( $settings.enableCoolingControl )"
-	
+
 	// min temp shutoff
 	if ( getTemp() <= settings.minTemp )
 	{
 		// TODO: Make this more robust. Needs to be OFF until temp reaches target
 		log.warn "activeCoolingControl: minTemp - triggered"
-		//setSwitch( OFF() , settings.activeCoolingDevices , state.lastCoolingState , true )
+		state.lastCoolingState = setSwitch( OFF() , settings.activeCoolingDevices , state.lastCoolingState , true )
 	}
-	
 	// cooling control is enabled
 	else if ( settings.enableCoolingControl )
 	{
 		// turn OFF cooling device when currentTemp reaches targetTemp
 		if ( getTemp() <= settings.targetTemp )
-		{
-			//state.lastCoolingState = setSwitch( OFF() , settings.activeCoolingDevices , state.lastCoolingState )
-		}
+			state.lastCoolingState = setSwitch( OFF() , settings.activeCoolingDevices , state.lastCoolingState )
+		
 		// turn ON cooling device when currentTemp is above targetTemp
 		else if ( getTemp() > settings.targetTemp )
-		{
-			//state.lastCoolingState = setSwitch( ON() , settings.activeCoolingDevices , state.lastCoolingState )
-		}
+			state.lastCoolingState = setSwitch( ON() , settings.activeCoolingDevices , state.lastCoolingState )
 	}
 	
 	// when cooling control is disabled, just turn on and leave on cooling. Unless minTemp was reached.
 	else
-	{
-		//state.lastCoolingState = setSwitch( ON() , settings.activeCoolingDevices , state.lastCoolingState , true )
-	}
+		state.lastCoolingState = setSwitch( ON() , settings.activeCoolingDevices , state.lastCoolingState , true )
+	
 }
 
 
@@ -330,12 +325,12 @@ double getTemp( boolean logging = false )
     if ( settings.sendPush )
     {
 		// alerts user if temp is below min temp and 
-        if ( temp < settings.minTemp )
+        if ( temp <= settings.minTemp )
 			triggerAlert( "Minimum Temperature ($settings.minTemp) Alarm Triggered. Current Temperature: $temp" as String , "getTemp" )
 
         // alerts user if temp is below max temp and user has alerts enabled. Will trigger every alert hour
-        if ( temp > settings.maxTemp )
-			triggerAlert( "Maximum Temperature (settings.maxTemp) Alarm Triggered. Current Temperature: $temp" as String , "getTemp" )
+        if ( temp >= settings.maxTemp )
+			triggerAlert( "Maximum Temperature ($settings.maxTemp) Alarm Triggered. Current Temperature: $temp" as String , "getTemp" )
     }
 	
 	if ( logging ) log.debug "TEMP: ( temp: $temp )"
@@ -416,47 +411,51 @@ int setFan( double rawLevel , boolean logging = false)
 }
 // @formatter:on
 
-// @formatter:off
-//boolean setSwitch( boolean on , def devices , boolean lastState , boolean logging = false )
-//{
-//    boolean newState = lastState
-//
-//	// prevent repeated commands being sent or if state changed
-//    boolean turnOFF_lastStateON = !on &&  lastState // turn OFF if lastState was ON
-//    boolean turnON_lastStateOFF =  on && !lastState // turn ON if lastState was OFF
-//
-//	for ( device in devices )
-//	{
-//		// state was manually changed, reset state
-//		boolean currentState = device.currentSwitch == "on"
-//        boolean turnOFF_currentStateON_diff_lastStateOFF = !on && (currentState != lastState) // turn OFF if currentState does not equal lastState set
-//        boolean turnON_currentStateOFF_diff_lastStateON  =  on && (currentState != lastState) // turn ON if currentState does not equal lastState set
-//
-//		if ( logging)
-//        {
-//        	log.debug "setSwitch: CURRENT_COMMAND($on)"
-//        	log.debug "setSwitch: $device_CURRENT_STATE($currentState)"
-//            log.debug "setSwitch: OFF_LOGIC($turnOFF_lastStateON , $turnOFF_currentStateON_diff_lastStateOFF)"
-//            log.debug "setSwitch: ON_LOGIC($turnON_lastStateOFF , $turnON_currentStateOFF_diff_lastStateON)"
-//        }
-//
-//		if ( turnOFF_lastStateON || turnOFF_currentStateON_diff_lastStateOFF )       // turn OFF
-//		{
-//			device.off()
-//            newState = false
-//		}
-//		else if ( turnON_lastStateOFF || turnON_currentStateOFF_diff_lastStateON )   // turn ON
-//		{
-//			device.on()
-//            newState = true
-//		}
-//	}
-//
-//	if ( logging ) log.debug "setSwitch: NEW_STATE( $newState )"
-//
-//	return newState
-//}
-// @formatter:on
+boolean setSwitch( boolean on , def devices , boolean lastState , boolean logging = false )
+{
+	if ( logging ) log.debug "setSwitch: LAST_COOLING_STATE( $lastState )"
+
+	boolean newState = lastState
+	
+	// turn OFF if lastState was ON
+	boolean turnOFF_lastStateON = !on && lastState
+	// turn ON if lastState was OFF
+	boolean turnON_lastStateOFF = on && !lastState
+	// prevent repeated commands being sent or if state changed
+	
+	for ( device in devices )
+	{
+		// state was manually changed, reset state
+		boolean currentState = device.currentSwitch == "on"
+		// turn OFF if currentState does not equal lastState set
+		boolean turnOFF_currentStateON_diff_lastStateOFF = !on && ( currentState != lastState )
+		// turn ON if currentState does not equal lastState set
+		boolean turnON_currentStateOFF_diff_lastStateON = on && ( currentState != lastState )
+		
+		if ( logging )
+		{
+			log.debug "setSwitch: CURRENT_COMMAND($on)"
+			log.debug "setSwitch: \"$device\" CURRENT_STATE($currentState)"
+			log.debug "setSwitch: OFF_LOGIC($turnOFF_lastStateON , $turnOFF_currentStateON_diff_lastStateOFF)"
+			log.debug "setSwitch: ON_LOGIC($turnON_lastStateOFF , $turnON_currentStateOFF_diff_lastStateON)"
+		}
+		
+		if ( turnOFF_lastStateON || turnOFF_currentStateON_diff_lastStateOFF ) // turn OFF
+		{
+			device.off()
+			newState = false
+		}
+		else if ( turnON_lastStateOFF || turnON_currentStateOFF_diff_lastStateON ) // turn ON
+		{
+			device.on()
+			newState = true
+		}
+	}
+	
+	if ( logging ) log.debug "setSwitch: NEW_STATE( $newState )"
+	
+	return newState
+}
 
 boolean disableFan() {return state.fanState = true}
 
