@@ -93,13 +93,13 @@ preferences
 		section( "Enable forced temperature control when outside \"PID Time Frame\"" )
 		{
 			paragraph "When enabled, the controller will turn on a switch that controls a forced temperature device. For example, a smart switch connected to an Air Conditioner."
-			input( title: "Enable Forced Temperature Control" , name: "enableForced" , type: "bool" , required: true , defaultValue: false )
+			input( title: "Enable Active Temperature Control" , name: "enableActive" , type: "bool" , required: true , defaultValue: false )
 		}
 		
 		section( "Forced Cooling Temperature Control Settings" , hideable: true , hidden: true)
 		{
 			paragraph "Select the cooling device(s) (switch), that will cool room the room to Target Temperature"
-			input( title: "Cooling Device(s)" , name: "forcedCoolingDevices" , type: "capability.switch" , multiple: true , required: false )
+			input( title: "Cooling Device(s)" , name: "activeCoolingDevices" , type: "capability.switch" , multiple: true , required: false )
 		
 			paragraph "Enable ON/OFF control? Some A/C have a built in thermostat and just need to be powered on and not turned ON/OFF. Will be turned off if temperature reaches Minimum Temperature"
 			input( title: "Enable ON/OFF Control" , name: "enableCoolingControl" , type: "bool" , required: false , defaultValue: false )
@@ -123,6 +123,10 @@ def updated()
 	initialize()
 }
 
+boolean OFF() {return false}
+
+boolean ON() {return true}
+
 def initialize()
 {
 	/*working variables*/
@@ -138,7 +142,7 @@ def initialize()
 	state.lastFanLevel = 0 // int
 	state.maxFanLevel = 99.0 // double
 	
-	state.coolingState = false // boolean
+	state.lastCoolingState = false // boolean
 	
 	setPID()
 	
@@ -257,14 +261,14 @@ void pidControlON()
 void forcedTempControlOFF( boolean logging = false )
 {
 	if ( logging ) log.debug "forcedTempControlOFF"
-	setCooling( false , true)
+	setSwitch( OFF() , settings.activeCoolingDevices , state.lastCoolingState )
 }
 
 void forcedTempControlON()
 {
-	log.debug "forcedTempControlON: settings.enableForced( $settings.enableForced )"
+	log.debug "forcedTempControlON: settings.enableActive( $settings.enableActive )"
 	
-	if ( settings.enableForced )
+	if ( settings.enableActive )
 	{
 		forcedCoolingControl( true )
 	}
@@ -278,7 +282,7 @@ void forcedCoolingControl( boolean logging = false )
 	if ( getTemp() <= settings.minTemp )
 	{
 		log.warn "forcedCoolingControl: minTemp - triggered"
-		setCooling( false , true )
+		setSwitch( OFF() , settings.activeCoolingDevices , state.lastCoolingState , true )
 	}
 		
 	// cooling control is enabled
@@ -288,18 +292,18 @@ void forcedCoolingControl( boolean logging = false )
 		
 		// turn OFF cooling device when currentTemp reaches targetTemp
 		if ( getTemp() <= settings.targetTemp )
-			setCooling( false )
+			setSwitch( OFF() , settings.activeCoolingDevices , state.lastCoolingState )
 			
 		// turn ON cooling device when currentTemp is above targetTemp
 		else if ( getTemp() > settings.targetTemp )
-			setCooling( true )
+			setSwitch( ON() , settings.activeCoolingDevices , state.lastCoolingState )
 	}
 	
 	// when cooling control is disabled, just turn on and leave on cooling. Unless minTemp was reached.
 	else
 	{
 		if( logging ) log.debug "forcedCoolingControl: settings.enableCoolingControl( $settings.enableCoolingControl )"
-		setCooling( true , true )
+		setSwitch( ON() , settings.activeCoolingDevices , state.lastCoolingState , true )
 	}
 }
 // @formatter:on
@@ -359,8 +363,10 @@ boolean afterAlertTime( boolean logging = false )
 {
 	boolean alert = false
 	long currentTime = getTime()
+	long lastAlertHourAdded = state.lastAlertTime + ( 3600 * 1000 )
 	
-	if ( state.lastAlertTime < currentTime ) alert = true
+	
+	if ( lastAlertHourAdded < currentTime ) alert = true
 	
 	if ( logging ) log.info( "afterAlertTime: lastAlertTime($state.lastAlertTime) , currentTime($currentTime) , alert($alert)" )
 	
@@ -413,46 +419,44 @@ int setFan( double rawLevel , boolean logging = false)
 // @formatter:on
 
 // @formatter:off
-boolean setCooling( boolean on , boolean logging = false )
+boolean setSwitch( boolean on , def devices , boolean lastState , boolean logging = false )
 {
-    boolean newState = state.coolingState
+    boolean newState = lastState
+	
 	// prevent repeated commands being sent or if state changed
-	for ( device in settings.forcedCoolingDevices )
+    boolean turnOFF_lastStateON = !on &&  lastState // turn OFF if lastState was ON
+    boolean turnON_lastStateOFF =  on && !lastState // turn ON if lastState was OFF
+
+	for ( device in devices )
 	{
+		// state was manually changed, reset state
 		boolean currentState = device.currentSwitch == "on"
-        
-        boolean turnOFF_lastStateON = !on &&  state.coolingState
-        boolean turnON_lastStateOFF =  on && !state.coolingState
-        
-        boolean turnOFF_currentStateON_diff_lastStateOFF = !on && (currentState != state.coolingState)
-        boolean turnON_currentStateOFF_diff_lastStateON  =  on && (currentState != state.coolingState)
+        boolean turnOFF_currentStateON_diff_lastStateOFF = !on && (currentState != lastState) // turn OFF if currentState does not equal lastState set
+        boolean turnON_currentStateOFF_diff_lastStateON  =  on && (currentState != lastState) // turn ON if currentState does not equal lastState set
         
 		if ( logging) 
         {
-        	log.debug "setCooling: currentCommand($on)"
-        	log.debug "setCooling: $device CURRENT_STATE($currentState)"
-            log.debug "setCooling: OFF_LOGIC($turnOFF_lastStateON , $turnOFF_currentStateON_diff_lastStateOFF)"
-            log.debug "setCooling:  ON_LOGIC($turnON_lastStateOFF , $turnON_currentStateOFF_diff_lastStateON)"
+        	log.debug "setSwitch: CURRENT_COMMAND($on)"
+        	log.debug "setSwitch: $device_CURRENT_STATE($currentState)"
+            log.debug "setSwitch: OFF_LOGIC($turnOFF_lastStateON , $turnOFF_currentStateON_diff_lastStateOFF)"
+            log.debug "setSwitch: ON_LOGIC($turnON_lastStateOFF , $turnON_currentStateOFF_diff_lastStateON)"
         }
-        
-        // current command matches state, do nothing. OR currentState does not match last coolingState and command is off, turn off
-		if ( turnOFF_lastStateON || turnOFF_currentStateON_diff_lastStateOFF )       // turn off cooling.
+		
+		if ( turnOFF_lastStateON || turnOFF_currentStateON_diff_lastStateOFF )       // turn OFF
 		{
 			device.off()
             newState = false
 		}
-		else if ( turnON_lastStateOFF || turnON_currentStateOFF_diff_lastStateON )   // turn on cooling
+		else if ( turnON_lastStateOFF || turnON_currentStateOFF_diff_lastStateON )   // turn ON
 		{
 			device.on()
             newState = true
 		}
 	}
-    
-    state.coolingState = newState
 	
-	if ( logging ) log.debug "setCooling: COOL( coolingState: $state.coolingState )"
+	if ( logging ) log.debug "setSwitch: NEW_STATE( $newState )"
 	
-	return state.coolingState
+	return newState
 }
 // @formatter:on
 
@@ -462,7 +466,7 @@ boolean enableFan() {return state.fanState = false}
 
 void triggerAlert( String alertMessage , String thrownFrom )
 {
-	if ( afterAlertTime( ) ) sendPush( alertMessage )
+	if ( afterAlertTime() ) sendPush( alertMessage )
 	log.warn( thrownFrom + ": " + alertMessage )
-	state.lastAlertTime = ( getTime() + ( 3600 * 1000 ) ) // next alert time set for hour in future
+	state.lastAlertTime = getTime()
 }
