@@ -257,7 +257,7 @@ void pidControlON()
 void forcedTempControlOFF( boolean logging = false )
 {
 	if ( logging ) log.debug "forcedTempControlOFF"
-	setCooling( false )
+	setCooling( false , true)
 }
 
 void forcedTempControlON()
@@ -398,7 +398,7 @@ int setFan( double rawLevel , boolean logging = false)
 	else if ( rawLevel > state.maxFanLevel ) 	boundedLevel = ( int ) state.maxFanLevel   		   // Max
 	else 										boundedLevel = ( int ) Math.round( rawLevel ) // Calculated
 
-    // Prevent const commands being sent to controller if no change is detected.
+    // Prevent constant commands being sent to controller if no change is detected. If the level has changed (manually) reset it
 	for ( fan in settings.fans )
     	if ( boundedLevel != state.lastFanLevel || fan.currentValue( "level" ) != boundedLevel )  
         	fan.setLevel( boundedLevel )
@@ -415,22 +415,22 @@ int setFan( double rawLevel , boolean logging = false)
 // @formatter:off
 boolean setCooling( boolean on , boolean logging = false )
 {
-	// turn off cooling
-	if ( state.coolingState && !on)
+	// prevent repeated commands being sent or if state changed
+	for ( device in settings.forcedCoolingDevices )
 	{
-		for ( device in settings.forcedCoolingDevices )
+		def test = device.currentValue( "value" )
+		log.debug "test: $test"
+		if ( state.coolingState && !on )        // turn off cooling.
+		{
 			device.off()
-		
-		state.coolingState = false
-	}
-	
-	// turn on cooling
-	else if ( !state.coolingState && on )
-	{
-		for( device in settings.forcedCoolingDevices )
+			state.coolingState = false
+		}
+
+		else if ( !state.coolingState && on )   // turn on cooling
+		{
 			device.on()
-			
-		state.coolingState = true
+			state.coolingState = true
+		}
 	}
 	
 	if ( logging ) log.debug "setCooling: COOL( coolingState: $state.coolingState )"
