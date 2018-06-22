@@ -278,7 +278,7 @@ void forcedCoolingControl( boolean logging = false )
 	if ( getTemp() <= settings.minTemp )
 	{
 		log.warn "forcedCoolingControl: minTemp - triggered"
-		setCooling( false )
+		setCooling( false , true )
 	}
 		
 	// cooling control is enabled
@@ -325,15 +325,15 @@ double getTemp( boolean logging = false )
 	}
 	
     // if min/max alerts are enabled, will trigger an every alert hour
-    if ( settings.sendPush && afterAlertTime() )
+    if ( settings.sendPush )
     {
 		// alerts user if temp is below min temp and 
         if ( temp < settings.minTemp )
-			triggerAlert( "Minimum Temperature Alarm Triggered. Current Temperature: $temp" as String )
+			triggerAlert( "Minimum Temperature ($settings.minTemp) Alarm Triggered. Current Temperature: $temp" as String , "getTemp" )
 
         // alerts user if temp is below max temp and user has alerts enabled. Will trigger every alert hour
         if ( temp > settings.maxTemp )
-			triggerAlert( "Maximum Temperature Alarm Triggered. Current Temperature: $temp" as String )
+			triggerAlert( "Maximum Temperature (settings.maxTemp) Alarm Triggered. Current Temperature: $temp" as String , "getTemp" )
     }
 	
 	if ( logging ) log.debug "TEMP: ( temp: $temp )"
@@ -443,9 +443,9 @@ boolean disableFan() {return state.fanState = true}
 
 boolean enableFan() {return state.fanState = false}
 
-void triggerAlert( String alertMessage )
+void triggerAlert( String alertMessage , String thrownFrom )
 {
-	sendPush( alertMessage )
-	log.warn( alertMessage )
+	if ( afterAlertTime( ) ) sendPush( alertMessage )
+	log.warn( thrownFrom + ": " + alertMessage )
 	state.lastAlertTime = ( getTime() + ( 3600 * 1000 ) ) // next alert time set for hour in future
 }
