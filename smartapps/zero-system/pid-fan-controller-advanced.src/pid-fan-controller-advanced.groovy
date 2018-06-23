@@ -105,16 +105,20 @@ preferences
 			input( title: "Enable ON/OFF Control" , name: "enableCoolingControl" , type: "bool" , required: false , defaultValue: false )
 		}
 	}
+ 
 	page( name: "settingsSafeguard" , title: "Safeguard Settings" , install: true )
 	{
-		paragraph "If enabled, if the Max Temperature is reached the app will turn off the device until temperatures return to Target Temperature or the Time Allotment has passed"
-		input( title: "Enable Overheat Protection" , name: "overheatProtectionEnabled" , type: "bool" , required: true , defaultValue: false )
-		
-		paragraph "Select the device(s) to turn OFF if overheat protection is triggered"
-		input( title: "Overheat Device(s)" , name: "overheatDevices" , type: "capability.switch" , multiple: true , required: false )
-		
-        paragraph "If the temperature has not returned to the Target Temperature after set amount of time has passed, the devices are turned back ON"
-        input( title: "Shutoff Duration" , name: "overheatOFFDuration" , type: "enum" , required: false , options: ["15-Minutes" , "30-Minutes" , "1-Hour" , "2-Hours"] , defaultValue: "15-Minutes" )
+    	section( "Overheat Protection" )
+        {
+            paragraph "If enabled, if the Max Temperature is reached the app will turn off the device until temperatures return to Target Temperature or the Time Allotment has passed"
+            input( title: "Enable Overheat Protection" , name: "overheatProtectionEnabled" , type: "bool" , required: true , defaultValue: false )
+
+            paragraph "Select the device(s) to turn OFF if overheat protection is triggered"
+            input( title: "Overheat Device(s)" , name: "overheatDevices" , type: "capability.switch" , multiple: true , required: false )
+
+            paragraph "If the temperature has not returned to the Target Temperature after set amount of time has passed, the devices are turned back ON"
+            input( title: "Shutoff Duration" , name: "overheatOFFDuration" , type: "enum" , required: false , options: ["15-Minutes" , "30-Minutes" , "1-Hour" , "2-Hours"] , defaultValue: "15-Minutes" )
+        }
 	}
 }
 // @formatter:on
@@ -150,8 +154,8 @@ def initialize()
 	
 	state.lastAlertTime = getTime() // long
 	
-	state.fanState = true    // boolean
-	state.lastFanLevel = 0   // int
+	state.fanState = true // boolean
+	state.lastFanLevel = 0 // int
 	state.maxFanLevel = 99.0 // double
 	
 	state.lastCoolingState = false // boolean
@@ -163,7 +167,7 @@ def initialize()
 	state.lastOverheatState = false // boolean
 	state.lastFreezingState = false // boolean
 	
-	state.overheatDuration = 900000    // int
+	state.overheatDuration = 900000 // int
 	state.overheatLastTime = getTime() // long
 	
 	setShutoffDuration()
@@ -247,10 +251,10 @@ void pidControlOFF( boolean logging = false )
 
 void pidControlON()
 {
-
+	pidCalculate()
 }
 
-void pidCalcualte()
+void pidCalculate()
 {
 	double currentTemp = getTemp( true )
 	
@@ -369,6 +373,19 @@ boolean getFanState()
 	return state.fanState
 }
 
+boolean afterTime( long lastTime , int duration , boolean logging = false )
+{
+	boolean after = false
+	long currentTime = getTime()
+	long lastTimeDurationAdded = lastTime + duration
+	
+	if ( currentTime > lastTimeDurationAdded ) after = true
+	
+	if ( logging ) log.info( "afterTime: lastTime($lastTime) , currentTime($currentTime) , after($after)" )
+	
+	return after
+}
+
 // =====================================================================
 // ============================== SETTERS ==============================
 // =====================================================================
@@ -389,6 +406,33 @@ void setPID()
 	}
 }
 
+int setShutoffDuration()
+{
+	switch ( overheatOFFDuration ) // Weird case values are smartthings enum weirdness
+	{
+		case "15-Minutes":
+			state.overheatDuration = 900000
+			break
+		
+		case "1":
+			state.overheatDuration = 1800000
+			break
+		
+		case "2":
+			state.overheatDuration = 3600000
+			break
+		
+		case "3":
+			state.overheatDuration = 7200000
+			break
+		
+		default:
+			log.error "runPID: switch($samplingTime) - Unmached Case."
+			state.overheatDuration = 900000
+			break
+	}
+}
+
 // @formatter:off
 int setFan( double rawLevel , boolean logging = false)
 {
@@ -402,7 +446,7 @@ int setFan( double rawLevel , boolean logging = false)
 
     // Prevent constant commands being sent to controller if no change is detected. If the level has changed (manually) reset it
 	for ( fan in settings.fans )
-    	if ( boundedLevel != state.lastFanLevel || fan.currentValue( "level" ) != boundedLevel )  
+    	if ( boundedLevel != state.lastFanLevel || fan.currentValue( "level" ) != boundedLevel )
         	fan.setLevel( boundedLevel )
 	
     state.lastFanLevel = boundedLevel
@@ -460,51 +504,26 @@ boolean setSwitch( boolean on , def devices , boolean lastState , boolean loggin
 	return newState
 }
 
-int setShutoffDuration()
-{
-	switch ( overheatOFFDuration ) // Weird case values are smartthings enum weirdness
-	{
-		case "15-Minutes":
-			state.overheatDuration = 900000
-			break
-		
-		case "1":
-			state.overheatDuration = 1800000
-			break
-		
-		case "2":
-			state.overheatDuration = 3600000
-			break
-		
-		case "3":
-			state.overheatDuration = 7200000
-			break
-		
-		default:
-			log.error "runPID: switch($samplingTime) - Unmached Case."
-			state.overheatDuration = 900000
-			break
-	}
-}
-
 boolean disableFan() {return state.fanState = true}
 
 boolean enableFan() {return state.fanState = false}
 
-boolean afterAlertTime( boolean logging = false )
+// ========================================================================
+// ============================== SAFEGUARDS ==============================
+// ========================================================================
+
+void triggerAlert( String alertMessage , String thrownFrom )
 {
-	boolean alert = false
-	long currentTime = getTime()
-	long lastAlertHourAdded = state.lastAlertTime + 3600000
+	if ( afterTime( state.lastAlertTime , 3600000 ) && settings.sendPush )
+	{
+		sendPush( alertMessage )
+		state.lastAlertTime = getTime()
+	}
+	log.warn( thrownFrom + ": " + alertMessage )
 	
-	if ( lastAlertHourAdded < currentTime ) alert = true
-	
-	if ( logging ) log.info( "afterAlertTime: lastAlertTime($state.lastAlertTime) , currentTime($currentTime) , alert($alert)" )
-	
-	return alert
 }
 
-boolean checkTempBounds()
+boolean safeguardCheck()
 {
 	boolean alarm = false
 	// if min/max alerts are enabled, will trigger an every alert hour
@@ -525,13 +544,6 @@ boolean checkTempBounds()
 	}
 	
 	return alarm
-}
-
-void triggerAlert( String alertMessage , String thrownFrom )
-{
-	if ( afterAlertTime() && settings.sendPush ) sendPush( alertMessage )
-	log.warn( thrownFrom + ": " + alertMessage )
-	state.lastAlertTime = getTime()
 }
 
 // TODO: if outside hotter than inside and active cooling is enabled turn on active cooling and turn off PID control
@@ -556,15 +568,3 @@ void overheatingProtection( boolean enableProtection )
 	}
 }
 
-boolean afterTime( long lastTime , int duration , boolean logging = false )
-{
-	boolean after = false
-	long currentTime = getTime()
-	long lastTimeDurationAdded = lastTime + duration
-	
-	if ( currentTime > lastTimeDurationAdded ) after = true
-	
-	if ( logging ) log.info( "afterTime: lastTime($lastTime) , currentTime($currentTime) , after($after)" )
-	
-	return after
-}
