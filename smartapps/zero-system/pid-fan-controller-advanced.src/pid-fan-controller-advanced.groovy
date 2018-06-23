@@ -42,9 +42,6 @@ preferences
 			
 			paragraph "If the temperature reaches the set maximum, an alert is triggered (if enabled)"
 		    input( title: "Maximum Temperature" , name: "maxTemp" , type: "decimal" , required: true , description: "90 (deg)" , defaultValue: 90 )
-			
-			paragraph "Enable alerts for max/min temperature alarms?"
-	        input( title: "Enable Alerts" , name: "sendPush" , type: "bool" , required: true , defaultValue: false )
 		}
 	}
 	
@@ -108,6 +105,12 @@ preferences
  
 	page( name: "settingsSafeguard" , title: "Safeguard Settings" , install: true )
 	{
+    	section()
+        {
+            paragraph "Enable alerts for max/min temperature alarms?"
+	        input( title: "Enable Alerts" , name: "sendPush" , type: "bool" , required: true , defaultValue: false )
+        }
+        
     	section( "Overheat Protection" )
         {
             paragraph "If enabled, if the Max Temperature is reached the app will turn off the device until temperatures return to Target Temperature or the Time Allotment has passed"
@@ -154,23 +157,23 @@ def initialize()
 	
 	state.lastAlertTime = getTime() // long
 	
-	state.fanState = true // boolean
+
 	state.lastFanLevel = 0 // int
 	state.maxFanLevel = 99.0 // double
 	
-	state.lastCoolingState = false // boolean
-	state.lastHeatingState = false // boolean
+	state.lastCoolingState = false // boolean. IF coolingDevices ARE or ARE NOT - ON
+	state.lastHeatingState = false // boolean. IF heatingDevices ARE or ARE NOT - ON
 	
 	state.maxTempFlag = false // boolean
 	state.minTempFlag = false // boolean
 	
-	state.lastOverheatState = false // boolean
-	state.lastFreezingState = false // boolean
+	state.lastOverheatState = true // boolean. IF overheatDevices ARE or ARE NOT - ON (ASSUMED ARE ON)
+	state.fanState = true           // boolean. IF fans CAN or CANNOT - RUN (FreezingState)
 	
 	state.overheatDuration = 900000 // int
 	state.overheatLastTime = getTime() // long
 	
-	setShutoffDuration()
+	setOverheatShutoffDuration()
 	
 	setPID()
 	
@@ -212,22 +215,22 @@ void scheduledHandler()
 {
 	log.debug "=========================================="
 	
-	log.debug "scheduledHandler: TIME( timeFrameEnabled: $settings.enableTimeFrame )"
+	log.debug "> scheduledHandler: TIME( timeFrameEnabled: $settings.enableTimeFrame )"
 	if ( settings.enableTimeFrame )
 	{
 		Date currentTime = new Date()
 		boolean withinTimeFrame = timeOfDayIsBetween( settings.startTime , settings.stopTime , currentTime , location.timeZone )
 		
-		log.debug "scheduledHandler: TIME( withinTimeFrame: $withinTimeFrame )"
+		log.debug "> scheduledHandler: TIME( withinTimeFrame: $withinTimeFrame )"
 		if ( withinTimeFrame )
 		{
-			activeTempControlOFF( true )
+			if ( settings.enableActive ) activeTempControlOFF()
 			pidControlON()
 		}
 		else
 		{
-			pidControlOFF( true )
-			activeTempControlON()
+			pidControlOFF()
+			if ( settings.enableActive ) activeTempControlON()
 		}
 	}
 	else
@@ -240,99 +243,155 @@ void scheduledHandler()
 // ============================== CONTROLLERS ==============================
 // =========================================================================
 
-void pidControlOFF( boolean logging = false )
+void pidControlOFF()
 {
-	if ( logging ) log.debug "pidControlOFF"
-	state.iValue = 0.0
-	state.lastTemp = getTemp()
-	state.lastTime = getTime()
-	setFan( 0.0 )
+	log.info "-> pidControlOFF"
+	
+	log.info "--> pid"
+	pid( false )
 }
 
 void pidControlON()
 {
-	pidCalculate()
+	log.info "-> pidControlON"
+	if ( withinTempBounds() )
+	{
+		log.info "--> pid"
+		pid( true )
+	}
+	else if ( state.maxTempFlag )
+	{
+		pidOverheatProtection()
+		setFanLevel( state.maxFanLevel )
+	}
+	else if ( state.minTempFlag  )
+	{
+		// TODO: pidControl min temp case
+	}
 }
 
-void pidCalculate()
+void activeTempControlOFF()
 {
-	double currentTemp = getTemp( true )
+	log.info "-> activeTempControlOFF"
 	
-	/*How long since we last calculated*/
-	long currentTime = getTime()
-	long timeChange = ( currentTime - state.lastTime ) / 1000.0
-	log.debug "PID: TIME( timeChange: $timeChange (sec) )"
+	log.info "--> activeCooling"
+	activeCooling( false )
 	
-	/*Compute all the working error variables*/
-	double pValue = settings.targetTemp - currentTemp
+	// TODO: activeHeating(OFF)
+}
+
+void activeTempControlON()
+{
+	log.info "-> activeTempControlON"
 	
-	state.iValue = ( state.iValue + ( state.ki * pValue ) )
+	log.info "--> activeCooling"
+	activeCooling( true )
 	
-	// @formatter:off //Windup elimination. Clamps I value between min and 100
+	// TODO: activeHeating(ON)
+
+}
+
+// =================================================================
+// ============================== PID ==============================
+// =================================================================
+
+void pid( boolean on , boolean logging = false )
+{
+	if ( on )
+	{
+		double currentTemp = getTemp( true )
+		
+		/*How long since we last calculated*/
+		long currentTime = getTime()
+		long timeChange = ( currentTime - state.lastTime ) / 1000.0
+		if ( logging ) log.debug "pid(ON): timeChange( $timeChange (sec) )"
+		
+		/*Compute all the working error variables*/
+		double pValue = settings.targetTemp - currentTemp
+		
+		state.iValue = ( state.iValue + ( state.ki * pValue ) )
+		
+		// @formatter:off //Windup elimination. Clamps I value between min and 100
 	if ( state.iValue < settings.minFanLevel )	 state.iValue = settings.minFanLevel
 	else if ( state.iValue > state.maxFanLevel ) state.iValue = state.maxFanLevel
 	// @formatter:on
-	
-	double dValue = currentTemp - state.lastTemp
-	
-	log.debug "PID: ERROR( pValue: $pValue , iValue: $state.iValue , dValue: $dValue )"
-	
-	/*Compute PID Output*/
-	double p = state.kp * pValue
-	double i = state.iValue
-	double d = state.kd * dValue
-	double level = p + i - d
-	log.debug "PID: COMPUTE( P: $p , I: $i , D: $d )"
-	
-	setFan( level , true )
-	
-	/*Remember some variables for next time*/
-	state.lastTemp = currentTemp
-	state.lastTime = currentTime
-}
-
-void activeTempControlOFF( boolean logging = false )
-{
-	if ( logging ) log.debug "activeTempControlOFF"
-	state.lastCoolingState = setSwitch( OFF() , settings.activeCoolingDevices , state.lastCoolingState , true )
-}
-
-void activeTempControlON( boolean logging = false )
-{
-	if ( logging ) log.debug "activeTempControlON: settings.enableActive( $settings.enableActive )"
-	if ( settings.enableActive ) activeCooling( true )
-}
-
-
-void activeCooling( boolean logging = false )
-{
-	if ( logging ) log.debug "activeCoolingControl: settings.enableCoolingControl( $settings.enableCoolingControl )"
-	
-	// min temp shutoff
-	if ( getTemp() <= settings.minTemp )
-	{
-		// TODO: Make this more robust. Needs to be OFF until temp reaches target
-		log.warn "activeCoolingControl: minTemp - triggered"
-		state.lastCoolingState = setSwitch( OFF() , settings.activeCoolingDevices , state.lastCoolingState , true )
-	}
-	// cooling control is enabled
-	else if ( settings.enableCoolingControl )
-	{
-		// turn OFF cooling device when currentTemp reaches targetTemp
-		if ( getTemp() <= settings.targetTemp )
-			state.lastCoolingState = setSwitch( OFF() , settings.activeCoolingDevices , state.lastCoolingState )
 		
-		// turn ON cooling device when currentTemp is above targetTemp
-		else if ( getTemp() > settings.targetTemp )
-			state.lastCoolingState = setSwitch( ON() , settings.activeCoolingDevices , state.lastCoolingState )
+		double dValue = currentTemp - state.lastTemp
+		
+		if ( logging ) log.debug "pid(ON): ERRORS( pValue: $pValue , iValue: $state.iValue , dValue: $dValue )"
+		
+		/*Compute PID Output*/
+		double p = state.kp * pValue
+		double i = state.iValue
+		double d = state.kd * dValue
+		double level = p + i - d
+		if ( logging ) log.debug "pid(ON): COMPUTE( P: $p , I: $i , D: $d )"
+		
+		setFanLevel( level , true )
+		
+		/*Remember some variables for next time*/
+		state.lastTemp = currentTemp
+		state.lastTime = currentTime
 	}
-	
-	// when cooling control is disabled, just turn on and leave on cooling. Unless minTemp was reached.
 	else
-		state.lastCoolingState = setSwitch( ON() , settings.activeCoolingDevices , state.lastCoolingState , true )
-	
+	{
+		log.debug "pid(OFF)"
+		state.iValue = 0.0
+		state.lastTemp = getTemp()
+		state.lastTime = getTime()
+		setFanLevel( settings.minFanLevel )
+	}
 }
 
+// =========================================================================================
+// ============================== ACTIVE HEATING AND COOLING  ==============================
+// =========================================================================================
+
+void activeCooling( boolean on , boolean logging = false )
+{
+	// turn ON active cooling
+	if ( on )
+	{
+		// min temp shutoff
+		if ( getTemp() <= settings.minTemp )
+		{
+			// TODO: Make this more robust. Needs to be OFF until temp reaches target
+			log.warn "activeCooling(ON): minTemp - triggered"
+			state.lastCoolingState = setSwitch( OFF() , settings.activeCoolingDevices , state.lastCoolingState )
+		}
+		// cooling control is enabled
+		else if ( settings.enableCoolingControl )
+		{
+			// turn OFF cooling device when currentTemp reaches targetTemp
+			if ( getTemp() <= settings.targetTemp )
+			{
+				if ( logging ) log.debug "activeCooling(ON) -> enableCoolingControl(TRUE): activeCooling(OFF)"
+				state.lastCoolingState = setSwitch( OFF() , settings.activeCoolingDevices , state.lastCoolingState )
+			}
+			
+			// turn ON cooling device when currentTemp is above targetTemp
+			else if ( getTemp() > settings.targetTemp )
+			{
+				if ( logging ) log.debug "activeCooling(ON) -> enableCoolingControl(TRUE): activeCooling(ON)"
+				state.lastCoolingState = setSwitch( ON() , settings.activeCoolingDevices , state.lastCoolingState )
+			}
+		}
+		
+		// when cooling control is disabled, just turn on and leave on cooling. Unless minTemp was reached.
+		else
+		{
+			if ( logging ) log.debug "activeCooling(ON): activeCooling(ON)"
+			state.lastCoolingState = setSwitch( ON() , settings.activeCoolingDevices , state.lastCoolingState )
+		}
+	}
+	// turn OFF active cooling
+	else
+	{
+		if ( logging ) log.debug "activeCooling(OFF): activeCooling(OFF)"
+		state.lastCoolingState = setSwitch( OFF() , settings.activeCoolingDevices , state.lastCoolingState )
+	}
+	
+}
 
 // =====================================================================
 // ============================== GETTERS ==============================
@@ -354,7 +413,7 @@ double getTemp( boolean logging = false )
 		temp = sum / state.numTempSensors
 	}
 	
-	if ( logging ) log.debug "TEMP: ( temp: $temp )"
+	if ( logging ) log.debug "getTemp: temp( $temp )"
 	
 	return temp
 }
@@ -363,13 +422,13 @@ double getTemp( boolean logging = false )
 long getTime( boolean logging = false )
 {
 	long currentTime = now()
-	if ( logging ) log.debug( "getTime: $currentTime" )
+	if ( logging ) log.debug "getTime: currentTime( $currentTime )"
 	return currentTime
 }
 
 boolean getFanState()
 {
-	if ( !state.fanState ) log.debug( "FAN_STATE: OFF" )
+	if ( !state.fanState ) log.debug( "getFanState: OFF" )
 	return state.fanState
 }
 
@@ -381,7 +440,7 @@ boolean afterTime( long lastTime , int duration , boolean logging = false )
 	
 	if ( currentTime > lastTimeDurationAdded ) after = true
 	
-	if ( logging ) log.info( "afterTime: lastTime($lastTime) , currentTime($currentTime) , after($after)" )
+	if ( logging ) log.debug "afterTime: lastTime($lastTime) , currentTime($currentTime) , after($after)"
 	
 	return after
 }
@@ -406,7 +465,7 @@ void setPID()
 	}
 }
 
-int setShutoffDuration()
+int setOverheatShutoffDuration()
 {
 	switch ( overheatOFFDuration ) // Weird case values are smartthings enum weirdness
 	{
@@ -427,14 +486,14 @@ int setShutoffDuration()
 			break
 		
 		default:
-			log.error "runPID: switch($samplingTime) - Unmached Case."
+			log.error "setOverheatShutoffDuration: switch($overheatOFFDuration) - Unmached Case."
 			state.overheatDuration = 900000
 			break
 	}
 }
 
 // @formatter:off
-int setFan( double rawLevel , boolean logging = false)
+int setFanLevel( double rawLevel , boolean logging = false)
 {
 	int boundedLevel = state.lastFanLevel
 	
@@ -452,7 +511,7 @@ int setFan( double rawLevel , boolean logging = false)
     state.lastFanLevel = boundedLevel
     
 	int currentLevel = settings.fans.get(0).currentValue( "level" )
-	if ( logging ) log.debug "OUTPUT: ( rawLevel: $rawLevel , boundedLevel: $boundedLevel , currentLevel: $currentLevel )"
+	if ( logging ) log.debug "setFanLevel:  rawLevel($rawLevel) , boundedLevel($boundedLevel) , currentLevel($currentLevel)"
 	
 	return boundedLevel
 }
@@ -460,7 +519,7 @@ int setFan( double rawLevel , boolean logging = false)
 
 boolean setSwitch( boolean on , def devices , boolean lastState , boolean logging = false )
 {
-	if ( logging ) log.debug "setSwitch: LAST_COOLING_STATE( $lastState )"
+	if ( logging ) log.debug "setSwitch: lastState( $lastState )"
 	
 	boolean newState = lastState
 	
@@ -481,8 +540,8 @@ boolean setSwitch( boolean on , def devices , boolean lastState , boolean loggin
 		
 		if ( logging )
 		{
-			log.debug "setSwitch: CURRENT_COMMAND($on)"
-			log.debug "setSwitch: \"$device\" CURRENT_STATE($currentState)"
+			log.debug "setSwitch: on($on)"
+			log.debug "setSwitch: \"$device\" currentState($currentState)"
 			log.debug "setSwitch: OFF_LOGIC($turnOFF_lastStateON , $turnOFF_currentStateON_diff_lastStateOFF)"
 			log.debug "setSwitch: ON_LOGIC($turnON_lastStateOFF , $turnON_currentStateOFF_diff_lastStateON)"
 		}
@@ -499,7 +558,7 @@ boolean setSwitch( boolean on , def devices , boolean lastState , boolean loggin
 		}
 	}
 	
-	if ( logging ) log.debug "setSwitch: NEW_STATE( $newState )"
+	if ( logging ) log.debug "setSwitch: newState( $newState )"
 	
 	return newState
 }
@@ -514,6 +573,7 @@ boolean enableFan() {return state.fanState = false}
 
 void triggerAlert( String alertMessage , String thrownFrom )
 {
+	// if min/max alerts are enabled, will trigger an every alert hour
 	if ( afterTime( state.lastAlertTime , 3600000 ) && settings.sendPush )
 	{
 		sendPush( alertMessage )
@@ -523,48 +583,57 @@ void triggerAlert( String alertMessage , String thrownFrom )
 	
 }
 
-boolean safeguardCheck()
+// Once temp falls out-of-bounds secondary method must correct the FLAG before withinBounds will return TRUE
+boolean withinTempBounds()
 {
-	boolean alarm = false
-	// if min/max alerts are enabled, will trigger an every alert hour
+	boolean inBounds = true
+	double currentTemp = getTemp()
 	
+	if ( state.minTempFlag || state.maxTempFlag )
+		inBounds = false
 	
-	// alerts user if temp is below min temp and
-	if ( temp <= settings.minTemp )
+	else if ( currentTemp <= settings.minTemp )
 	{
 		triggerAlert( "Minimum Temperature ($settings.minTemp) Alarm Triggered. Current Temperature: $temp" as String , "getTemp" )
 		state.minTempFlag = true
+		inBounds = false
 	}
 	
-	// alerts user if temp is below max temp and user has alerts enabled. Will trigger every alert hour
-	else if ( temp >= settings.maxTemp )
+	else if ( currentTemp >= settings.maxTemp )
 	{
 		triggerAlert( "Maximum Temperature ($settings.maxTemp) Alarm Triggered. Current Temperature: $temp" as String , "getTemp" )
 		state.maxTempFlag = true
+		inBounds = false
 	}
 	
-	return alarm
+	return inBounds
 }
 
 // TODO: if outside hotter than inside and active cooling is enabled turn on active cooling and turn off PID control
 // if overheating protection occurs, it is because the PID fans could not cool enough. Turn off heat source
-void overheatingProtection( boolean enableProtection )
+void pidOverheatProtection( )
 {
-	if ( enableProtection )
+	// WARNING: ASSUMES THAT "overheatDevices" ARE ON
+	// first time protection has run. IF flag is set (TRUE) and devices are ON. Turn OFF devices and set timer
+	if ( state.maxTempFlag && state.lastOverheatState )
 	{
 		// turn off heat source (lights)
 		state.lastOverheatState = setSwitch( OFF() , settings.overheatDevices , state.lastOverheatState )
 		
 		// set timer
 		state.overheatLastTime = getTime()
+		
+		log.warn "pidOverheatingProtection -> enableProtection(TRUE) - > maxTempFlag(TRUE): overheatDevices(OFF) , overheatLastTime(NOW)"
 	}
-	else
+	
+	// if temperatures return to normal or the time-limit to be off is reached. turn devices back ON.
+	else if ( getTemp() < settings.targetTemp || afterTime( state.overheatLastTime , state.overheatDuration ))
 	{
 		// turn on heat source (lights)
 		state.lastOverheatState = setSwitch( ON() , settings.overheatDevices , state.lastOverheatState )
 		
 		// reset flag
 		state.maxTempFlag = false
+		log.warn "pidOverheatingProtection -> enableProtection(FALSE) - > maxTempFlag(FALSE): overheatDevices(ON)"
 	}
 }
-
