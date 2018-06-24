@@ -247,7 +247,7 @@ void pidControlOFF()
 {
 	log.info "-> pidControlOFF"
 	
-	log.info "--> pid"
+	log.info "--> pid(OFF)"
 	pid( false )
 }
 
@@ -256,12 +256,15 @@ void pidControlON()
 	log.info "-> pidControlON"
 	if ( withinTempBounds() )
 	{
-		log.info "--> pid"
+		log.info "--> pid(ON)"
 		pid( true )
 	}
 	else if ( state.maxTempFlag )
 	{
+    	log.warn "--> pidOverheatProtection"
 		pidOverheatProtection()
+        
+        log.info "--> setFanLevel($state.maxFanLevel)"
 		setFanLevel( state.maxFanLevel )
 	}
 	else if ( state.minTempFlag  )
@@ -274,7 +277,7 @@ void activeTempControlOFF()
 {
 	log.info "-> activeTempControlOFF"
 	
-	log.info "--> activeCooling"
+	log.info "--> activeCooling(OFF)"
 	activeCooling( false )
 	
 	// TODO: activeHeating(OFF)
@@ -284,7 +287,7 @@ void activeTempControlON()
 {
 	log.info "-> activeTempControlON"
 	
-	log.info "--> activeCooling"
+	log.info "--> activeCooling(ON)"
 	activeCooling( true )
 	
 	// TODO: activeHeating(ON)
@@ -613,6 +616,11 @@ boolean withinTempBounds()
 // if overheating protection occurs, it is because the PID fans could not cool enough. Turn off heat source
 void pidOverheatProtection( )
 {
+	boolean returnToTargetTemp = getTemp() < settings.targetTemp
+    boolean afterTimeDuration = afterTime( state.overheatLastTime , state.overheatDuration )
+    
+    long timeRemaing =  ( getTime() - state.overheatLastTime )
+
 	// WARNING: ASSUMES THAT "overheatDevices" ARE ON
 	// first time protection has run. IF flag is set (TRUE) and devices are ON. Turn OFF devices and set timer
 	if ( state.maxTempFlag && state.lastOverheatState )
@@ -623,11 +631,11 @@ void pidOverheatProtection( )
 		// set timer
 		state.overheatLastTime = getTime()
 		
-		log.warn "pidOverheatingProtection -> enableProtection(TRUE) - > maxTempFlag(TRUE): overheatDevices(OFF) , overheatLastTime(NOW)"
+		log.warn "pidOverheatingProtection -> enableProtection(TRUE) - > maxTempFlag($state.maxTempFlag): lastOverheatState($state.lastOverheatState) , overheatLastTime($state.overheatLastTime)"
 	}
 	
 	// if temperatures return to normal or the time-limit to be off is reached. turn devices back ON.
-	else if ( getTemp() < settings.targetTemp || afterTime( state.overheatLastTime , state.overheatDuration ))
+	else if ( returnToTargetTemp || afterTimeDuration )
 	{
 		// turn on heat source (lights)
 		state.lastOverheatState = setSwitch( ON() , settings.overheatDevices , state.lastOverheatState )
@@ -636,4 +644,6 @@ void pidOverheatProtection( )
 		state.maxTempFlag = false
 		log.warn "pidOverheatingProtection -> enableProtection(FALSE) - > maxTempFlag(FALSE): overheatDevices(ON)"
 	}
+    else
+    	log.warn "pidOverheatingProtection: returnToTargetTemp($returnToTargetTemp) , afterTimeDuration($afterTimeDuration)"
 }
