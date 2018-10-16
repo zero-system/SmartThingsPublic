@@ -39,6 +39,7 @@ metadata {
 		fingerprint profileId: "0104", inClusters: "0000,0001,0003,0004,0005,0009,0020,0101,0402,0B05,FDBD", outClusters: "000A,0019", manufacturer: "Kwikset", model: "SMARTCODE_DEADBOLT_10", deviceJoinName: "Kwikset 10-Button Deadbolt"
 		fingerprint profileId: "0104", inClusters: "0000,0001,0003,0004,0005,0009,0020,0101,0402,0B05,FDBD", outClusters: "000A,0019", manufacturer: "Kwikset", model: "SMARTCODE_DEADBOLT_10T", deviceJoinName: "Kwikset 10-Button Touch Deadbolt"
 		fingerprint profileId: "0104", inClusters: "0000, 0003, 0101", manufacturer:"Kwikset", model:"Smartcode", deviceJoinName: "Kwikset Smartcode Lock"
+		fingerprint profileId: "0104", inClusters: "0000, 0001, 0003, 0009, 0020, 0101, 0B05, FC00", outClusters: "000A, 0019", manufacturer: "Schlage", model: "BE468", deviceJoinName: "Schlage Connect Smart Deadbolt"
 	}
 
 	tiles(scale: 2) {
@@ -558,7 +559,7 @@ private def parseCommandResponse(String description) {
 				return null
 			}
 			codeName = getCodeName(lockCodes, codeID)
-			responseMap.data = [ usedCode: codeID, codeName: codeName, method: "keypad" ]
+			responseMap.data = [ codeId: codeID as String, usedCode: codeID, codeName: codeName, method: "keypad" ]
 		} else if (eventSource == 1) {
 			responseMap.data = [ method: "command" ]
 		} else if (eventSource == 2) {
