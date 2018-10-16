@@ -103,7 +103,7 @@ preferences
 		}
 	}
  
-	page( name: "settingsSafeguard" , title: "Safeguard Settings" , install: true )
+	page( name: "settingsSafeguard" , title: "Safeguard Settings", nextPage: "finalPage")
 	{
     	section()
         {
@@ -123,6 +123,14 @@ preferences
             input( title: "Shutoff Duration" , name: "overheatOFFDuration" , type: "enum" , required: false , options: ["15-Minutes" , "30-Minutes" , "1-Hour" , "2-Hours"] , defaultValue: "15-Minutes" )
         }
 	}
+    page(name: "finalPage", title: "Name App and Pick Configure Modes", install: true, uninstall: true) 
+    {
+        section() 
+        {
+            label title: "Assign a name", required: false
+            mode title: "Set for specific mode(s)", required: false
+        }
+    }
 }
 // @formatter:on
 
