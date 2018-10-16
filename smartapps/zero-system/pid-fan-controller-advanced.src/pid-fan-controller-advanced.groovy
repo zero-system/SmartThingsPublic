@@ -165,7 +165,7 @@ def initialize()
 	
 	state.lastAlertTime = getTime() // long
 	
-
+	
 	state.lastFanLevel = 0 // int
 	state.maxFanLevel = 99.0 // double
 	
@@ -269,10 +269,10 @@ void pidControlON()
 	}
 	else if ( state.maxTempFlag )
 	{
-    	log.warn "--> pidOverheatProtection"
+		log.warn "--> pidOverheatProtection"
 		pidOverheatProtection()
-        
-        log.info "--> setFanLevel($state.maxFanLevel)"
+		
+		log.info "--> setFanLevel($state.maxFanLevel)"
 		setFanLevel( state.maxFanLevel )
 	}
 	else if ( state.minTempFlag  )
@@ -299,7 +299,7 @@ void activeTempControlON()
 	activeCooling( true )
 	
 	// TODO: activeHeating(ON)
-
+	
 }
 
 // =================================================================
@@ -625,10 +625,10 @@ boolean withinTempBounds()
 void pidOverheatProtection( )
 {
 	boolean returnToTargetTemp = getTemp() < settings.targetTemp
-    boolean afterTimeDuration = afterTime( state.overheatLastTime , state.overheatDuration )
-    
-    long timeRemaing =  ( getTime() - state.overheatLastTime )
-
+	boolean afterTimeDuration = afterTime( state.overheatLastTime , state.overheatDuration )
+	
+	long timeRemaing =  ( getTime() - state.overheatLastTime )
+	
 	// WARNING: ASSUMES THAT "overheatDevices" ARE ON
 	// first time protection has run. IF flag is set (TRUE) and devices are ON. Turn OFF devices and set timer
 	if ( state.maxTempFlag && state.lastOverheatState )
@@ -652,6 +652,6 @@ void pidOverheatProtection( )
 		state.maxTempFlag = false
 		log.warn "pidOverheatingProtection -> enableProtection(FALSE) - > maxTempFlag(FALSE): overheatDevices(ON)"
 	}
-    else
-    	log.warn "pidOverheatingProtection: returnToTargetTemp($returnToTargetTemp) , afterTimeDuration($afterTimeDuration)"
+	else
+		log.warn "pidOverheatingProtection: returnToTargetTemp($returnToTargetTemp) , afterTimeDuration($afterTimeDuration)"
 }
