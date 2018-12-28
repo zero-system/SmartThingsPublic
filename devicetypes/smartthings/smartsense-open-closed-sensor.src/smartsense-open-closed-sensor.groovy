@@ -34,6 +34,7 @@ metadata {
 		fingerprint inClusters: "0000,0001,0003,0020,0402,0500,0B05", outClusters: "0019", manufacturer: "CentraLite", model: "3323-G", deviceJoinName: "Centralite Micro Door Sensor"
 		fingerprint inClusters: "0000,0001,0003,0402,0500,0020,0B05", outClusters: "0019", manufacturer: "Visonic", model: "MCT-340 E", deviceJoinName: "Visonic Door/Window Sensor"
 		fingerprint inClusters: "0000,0001,0003,0020,0402,0500,0B05", outClusters: "0019", manufacturer: "Ecolink", model: "4655BC0-R", deviceJoinName: "Ecolink Door/Window Sensor"
+		fingerprint inClusters: "0000,0001,0003,0020,0402,0500,0B05,FC01,FC02", outClusters: "0003,0019", manufacturer: "iMagic by GreatStar", model: "1116-S", deviceJoinName: "Iris Contact Sensor"
 	}
 
 	simulator {
@@ -180,8 +181,20 @@ def configure() {
 	sendEvent(name: "checkInterval", value: 2 * 60 * 60 + 1 * 60, displayed: false, data: [protocol: "zigbee", hubHardwareId: device.hub.hardwareID, offlinePingable: "1"])
 
 	log.debug "Configuring Reporting, IAS CIE, and Bindings."
-
+	def cmds = refresh() + zigbee.iasZoneConfig(30, 60 * 5) + zigbee.batteryConfig() + zigbee.temperatureConfig(30, 60 * 30)
+	if(getDataValue("manufacturer") == "Ecolink") {
+		cmds += configureEcolink()
+	}
 	// temperature minReportTime 30 seconds, maxReportTime 5 min. Reporting interval if no activity
 	// battery minReport 30 seconds, maxReportTime 6 hrs by default
-	return refresh() + zigbee.iasZoneConfig(30, 60 * 5) + zigbee.batteryConfig() + zigbee.temperatureConfig(30, 60 * 30) // send refresh cmds as part of config
+	return cmds
+}
+
+private configureEcolink() {
+	sendEvent(name: "checkInterval", value: 60 * 60, displayed: false, data: [protocol: "zigbee", hubHardwareId: device.hub.hardwareID])
+
+	def enrollCmds = zigbee.writeAttribute(0x0020, 0x0000, 0x23, 0x00001C20) + zigbee.command(0x0020, 0x03, "0200") +
+			zigbee.writeAttribute(0x0020, 0x0003, 0x21, 0x0028) + zigbee.command(0x0020, 0x02, "B1040000")
+
+	return zigbee.addBinding(0x0020) + refresh() + enrollCmds
 }
